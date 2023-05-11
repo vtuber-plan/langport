@@ -33,4 +33,3 @@ class RwkvAdapter(BaseAdapter):
 
     def get_default_conv_template(self, model_path: str) -> Conversation:
         return get_conv_template("rwkv")
-

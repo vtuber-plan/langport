@@ -15,6 +15,7 @@ from transformers import (
 from langport.data.conversation import Conversation, get_conv_template
 from langport.model.model_adapter import BaseAdapter
 
+
 class DollyV2Adapter(BaseAdapter):
     """The model adapter for databricks/dolly-v2-12b"""
 

@@ -21,6 +21,7 @@ from transformers import (
 )
 
 from langport.data.conversation import Conversation, get_conv_template
+
 # from langport.model.compression import load_compress_model
 # from langport.model.monkey_patch_non_inplace import (
 #     replace_llama_attn_with_non_inplace_operations,
@@ -203,10 +204,11 @@ def add_model_args(parser):
         help="Only when using 8-bit quantization: Offload excess weights to the CPU that don't fit on the GPU",
     )
 
+
 adapters_path = os.path.join(os.path.dirname(__file__), "adapters")
-for (module_loader, name, ispkg) in pkgutil.iter_modules([adapters_path]):
+for module_loader, name, ispkg in pkgutil.iter_modules([adapters_path]):
     # print(module_loader, name, ispkg)
-    importlib.import_module('.adapters.' + name, __package__)
+    importlib.import_module(".adapters." + name, __package__)
 
 # Register all adapters.
 for cls in BaseAdapter.__subclasses__():

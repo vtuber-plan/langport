@@ -15,6 +15,7 @@ from transformers import (
 from langport.data.conversation import Conversation, get_conv_template
 from langport.model.model_adapter import BaseAdapter
 
+
 class BaizeAdapter(BaseAdapter):
     """The model adapter for project-baize/baize-lora-7B"""
 

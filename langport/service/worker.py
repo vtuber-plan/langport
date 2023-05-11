@@ -15,21 +15,22 @@ from langport.core.worker import ModelWorker
 
 import uvicorn
 
-from langport.constants import WORKER_HEART_BEAT_INTERVAL, ErrorCode
-from langport.model.model_adapter import load_model, add_model_args
-from langport.core.inference import generate_stream
-from langport.utils import build_logger, server_error_msg, pretty_print_semaphore
+from langport.model.model_adapter import add_model_args
+from langport.utils import build_logger
 
 app = FastAPI()
 
+
 def release_model_semaphore():
     app.worker.model_semaphore.release()
+
 
 def acquire_model_semaphore():
     app.worker.global_counter += 1
     if app.worker.model_semaphore is None:
         app.worker.model_semaphore = asyncio.Semaphore(args.limit_model_concurrency)
     return app.worker.model_semaphore.acquire()
+
 
 def create_background_tasks():
     background_tasks = BackgroundTasks()
@@ -45,6 +46,7 @@ async def api_chat_stream(request: Request):
     background_tasks = create_background_tasks()
     return StreamingResponse(generator, background=background_tasks)
 
+
 @app.post("/chat")
 async def api_chat(request: Request):
     params = await request.json()
@@ -52,6 +54,7 @@ async def api_chat(request: Request):
     output = app.worker.generate(params)
     release_model_semaphore()
     return JSONResponse(output)
+
 
 @app.post("/completion_stream")
 async def api_completion_stream(request: Request):
@@ -84,13 +87,16 @@ async def api_embeddings(request: Request):
 async def api_get_status(request: Request):
     return app.worker.get_status()
 
+
 @app.on_event("startup")
 async def startup_event():
     app.worker.start()
 
+
 @app.on_event("shutdown")
 def shutdown_event():
     app.worker.stop()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -120,7 +126,7 @@ if __name__ == "__main__":
 
     if args.port is None:
         args.port = random.randint(21001, 29001)
-    
+
     if args.worker_address is None:
         args.worker_address = f"http://{args.host}:{args.port}"
 

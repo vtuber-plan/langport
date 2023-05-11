@@ -19,7 +19,7 @@ from langport.protocol.worker_protocol import RegisterWorkerRequest, RemoveWorke
 import torch
 
 from langport.constants import WORKER_API_TIMEOUT, WORKER_HEART_BEAT_INTERVAL, WORKER_HEART_BEAT_CHECK_INTERVAL, ErrorCode
-from langport.model.model_adapter import load_model, add_model_args
+from langport.model.model_adapter import load_model
 from langport.core.inference import generate_stream
 from langport.utils import server_error_msg, pretty_print_semaphore
 
