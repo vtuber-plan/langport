@@ -41,6 +41,7 @@ from langport.protocol.openai_api_protocol import (
     ModelPermission,
     UsageInfo,
 )
+from langport.protocol.worker_protocol import WorkerAddressRequest
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +58,15 @@ headers = {"User-Agent": "FastChat API Server"}
 
 
 def create_error_response(code: int, message: str) -> JSONResponse:
-    return JSONResponse(ErrorResponse(message=message, code=code).dict(), status_code=500) 
+    return JSONResponse(
+        ErrorResponse(message=message, code=code).dict(), status_code=500
+    )
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
     return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
+
 
 async def check_model(request) -> Optional[JSONResponse]:
     controller_address = app_settings.controller_address
@@ -75,9 +79,10 @@ async def check_model(request) -> Optional[JSONResponse]:
             models = models_ret.json()["models"]
             ret = create_error_response(
                 ErrorCode.INVALID_MODEL,
-                f"Only {'&&'.join(models)} allowed now, your model {request.model}"
+                f"Only {'&&'.join(models)} allowed now, your model {request.model}",
             )
     return ret
+
 
 async def check_length(request, prompt, max_tokens):
     async with httpx.AsyncClient() as client:
@@ -98,7 +103,7 @@ async def check_length(request, prompt, max_tokens):
             timeout=WORKER_API_TIMEOUT,
         )
         token_num = response.json()["count"]
-    
+
     max_new_tokens = max_tokens
     context_len = 2048
 
@@ -109,50 +114,52 @@ async def check_length(request, prompt, max_tokens):
             f"However, you requested {max_new_tokens + token_num} tokens "
             f"({token_num} in the messages, "
             f"{max_new_tokens} in the completion). "
-            f"Please reduce the length of the messages or completion."
+            f"Please reduce the length of the messages or completion.",
         )
     else:
         return None
+
 
 def check_requests(request) -> Optional[JSONResponse]:
     # Check all params
     if request.max_tokens is not None and request.max_tokens <= 0:
         return create_error_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
-            f"{request.max_tokens} is less than the minimum of 1 - 'max_tokens'"
+            f"{request.max_tokens} is less than the minimum of 1 - 'max_tokens'",
         )
     if request.n is not None and request.n <= 0:
         return create_error_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
-            f"{request.n} is less than the minimum of 1 - 'n'"
+            f"{request.n} is less than the minimum of 1 - 'n'",
         )
     if request.temperature is not None and request.temperature < 0:
         return create_error_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
-            f"{request.temperature} is less than the minimum of 0 - 'temperature'"
+            f"{request.temperature} is less than the minimum of 0 - 'temperature'",
         )
     if request.temperature is not None and request.temperature > 2:
         return create_error_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
-            f"{request.temperature} is greater than the maximum of 2 - 'temperature'"
+            f"{request.temperature} is greater than the maximum of 2 - 'temperature'",
         )
     if request.top_p is not None and request.top_p < 0:
         return create_error_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
-            f"{request.top_p} is less than the minimum of 0 - 'top_p'"
+            f"{request.top_p} is less than the minimum of 0 - 'top_p'",
         )
     if request.top_p is not None and request.top_p > 1:
         return create_error_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
-            f"{request.top_p} is greater than the maximum of 1 - 'temperature'"
+            f"{request.top_p} is greater than the maximum of 1 - 'temperature'",
         )
-    if request.stop is not None and \
-        (not isinstance(request.stop, str) and not isinstance(request.stop, list)):
+    if request.stop is not None and (
+        not isinstance(request.stop, str) and not isinstance(request.stop, list)
+    ):
         return create_error_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
-            f"{request.stop} is not valid under any of the given schemas - 'stop'"
+            f"{request.stop} is not valid under any of the given schemas - 'stop'",
         )
-        
+
     return None
 
 
@@ -202,21 +209,19 @@ def get_gen_params(
         "top_p": top_p,
         "max_new_tokens": max_tokens,
         "echo": echo,
-        "stream": stream
+        "stream": stream,
     }
 
     if stop is None:
-        gen_params.update({
-            "stop": conv.stop_str,
-            "stop_token_ids": conv.stop_token_ids
-        })
+        gen_params.update(
+            {"stop": conv.stop_str, "stop_token_ids": conv.stop_token_ids}
+        )
     else:
-        gen_params.update({
-            "stop": stop
-        })
+        gen_params.update({"stop": stop})
 
     logger.debug(f"==== request ====\n{gen_params}")
     return gen_params
+
 
 @retry(stop=stop_after_attempt(5))
 async def _get_worker_address(model_name: str, client: httpx.AsyncClient) -> str:
@@ -231,7 +236,8 @@ async def _get_worker_address(model_name: str, client: httpx.AsyncClient) -> str
     controller_address = app_settings.controller_address
 
     ret = await client.post(
-        controller_address + "/get_worker_address", json={"model": model_name}
+        controller_address + "/get_worker_address",
+        json=WorkerAddressRequest(model_name=model_name).dict(),
     )
     worker_addr = ret.json()["address"]
     # No available worker
@@ -253,13 +259,7 @@ async def show_available_models():
     # TODO: return real model permission details
     model_cards = []
     for m in models:
-        model_cards.append(
-            ModelCard(
-                id=m,
-                root=m,
-                permission=[ModelPermission()]
-            )
-        )
+        model_cards.append(ModelCard(id=m, root=m, permission=[ModelPermission()]))
     return ModelList(data=model_cards)
 
 
@@ -284,7 +284,9 @@ async def create_chat_completion(request: ChatCompletionRequest):
         stop=request.stop,
     )
     if request.stream:
-        generator = chat_completion_stream_generator(request.model, gen_params, request.n)
+        generator = chat_completion_stream_generator(
+            request.model, gen_params, request.n
+        )
         return StreamingResponse(generator, media_type="text/event-stream")
 
     choices = []
@@ -296,10 +298,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
     try:
         all_tasks = await asyncio.gather(*chat_completions)
     except Exception as e:
-        return create_error_response(
-            ErrorCode.INTERNAL_ERROR,
-            str(e)
-        )
+        return create_error_response(ErrorCode.INTERNAL_ERROR, str(e))
     usage = UsageInfo()
     for i, content in enumerate(all_tasks):
         if content["error_code"] != 0:
@@ -315,18 +314,12 @@ async def create_chat_completion(request: ChatCompletionRequest):
         for usage_key, usage_value in task_usage.dict().items():
             setattr(usage, usage_key, getattr(usage, usage_key) + usage_value)
 
-    return ChatCompletionResponse(
-        model=request.model,
-        choices=choices,
-        usage=usage
-    )
+    return ChatCompletionResponse(model=request.model, choices=choices, usage=usage)
 
 
 async def chat_completion_stream_generator(
-        model_name: str,
-        gen_params: Dict[str, Any],
-        n: int
-    ) -> Generator[str, Any, None]:
+    model_name: str, gen_params: Dict[str, Any], n: int
+) -> Generator[str, Any, None]:
     """
     Event stream format:
     https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#event_stream_format
@@ -341,9 +334,7 @@ async def chat_completion_stream_generator(
             finish_reason=None,
         )
         chunk = ChatCompletionStreamResponse(
-            id=id,
-            choices=[choice_data],
-            model=model_name
+            id=id, choices=[choice_data], model=model_name
         )
         yield f"data: {chunk.json(exclude_unset=True, ensure_ascii=False)}\n\n"
 
@@ -353,8 +344,8 @@ async def chat_completion_stream_generator(
                 yield f"data: {json.dumps(content, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
                 return
-            decoded_unicode = content["text"].replace('\ufffd', '')
-            delta_text = decoded_unicode[len(previous_text):]
+            decoded_unicode = content["text"].replace("\ufffd", "")
+            delta_text = decoded_unicode[len(previous_text) :]
             previous_text = decoded_unicode
 
             if len(delta_text) == 0:
@@ -365,9 +356,7 @@ async def chat_completion_stream_generator(
                 finish_reason=content.get("finish_reason", None),
             )
             chunk = ChatCompletionStreamResponse(
-                id=id,
-                choices=[choice_data],
-                model=model_name
+                id=id, choices=[choice_data], model=model_name
             )
             if delta_text is None:
                 if content.get("finish_reason", None) is not None:
@@ -400,7 +389,10 @@ async def chat_completion_stream(model_name: str, gen_params: Dict[str, Any]):
                     data = json.loads(chunk.decode())
                     yield data
 
-async def chat_completion(model_name: str, gen_params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+
+async def chat_completion(
+    model_name: str, gen_params: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
     async with httpx.AsyncClient() as client:
         worker_addr = await _get_worker_address(model_name, client)
 
@@ -423,6 +415,7 @@ async def chat_completion(model_name: str, gen_params: Dict[str, Any]) -> Option
             output = data
 
         return output
+
 
 @app.post("/v1/completions")
 async def create_completion(request: CompletionRequest):
@@ -452,14 +445,11 @@ async def create_completion(request: CompletionRequest):
         for i in range(request.n):
             content = asyncio.create_task(generate_completion(payload))
             text_completions.append(content)
-        
+
         try:
             all_tasks = await asyncio.gather(*text_completions)
         except Exception as e:
-            return create_error_response(
-                ErrorCode.INTERNAL_ERROR,
-                str(e)
-            )
+            return create_error_response(ErrorCode.INTERNAL_ERROR, str(e))
 
         choices = []
         usage = UsageInfo()
@@ -479,10 +469,9 @@ async def create_completion(request: CompletionRequest):
                 setattr(usage, usage_key, getattr(usage, usage_key) + usage_value)
 
         return CompletionResponse(
-            model=request.model,
-            choices=choices,
-            usage=UsageInfo.parse_obj(usage)
+            model=request.model, choices=choices, usage=UsageInfo.parse_obj(usage)
         )
+
 
 async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
     model_name = payload["model"]
@@ -495,8 +484,8 @@ async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
                 yield f"data: {json.dumps(content, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
                 return
-            decoded_unicode = content["text"].replace('\ufffd', '')
-            delta_text = decoded_unicode[len(previous_text):]
+            decoded_unicode = content["text"].replace("\ufffd", "")
+            delta_text = decoded_unicode[len(previous_text) :]
             previous_text = decoded_unicode
 
             choice_data = CompletionResponseStreamChoice(
@@ -506,10 +495,7 @@ async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
                 finish_reason=content.get("finish_reason", None),
             )
             chunk = CompletionStreamResponse(
-                id=id,
-                object="text_completion",
-                choices=[choice_data],
-                model=model_name
+                id=id, object="text_completion", choices=[choice_data], model=model_name
             )
             if len(delta_text) == 0:
                 if content.get("finish_reason", None) is not None:
@@ -577,9 +563,9 @@ async def create_embeddings(request: EmbeddingsRequest):
         data=data,
         model=request.model,
         usage=UsageInfo(
-            prompt_tokens = embedding["token_num"],
-            total_tokens = embedding["token_num"],
-            completion_tokens = None,
+            prompt_tokens=embedding["token_num"],
+            total_tokens=embedding["token_num"],
+            completion_tokens=None,
         ),
     ).dict(exclude_none=True)
 
@@ -634,4 +620,10 @@ if __name__ == "__main__":
 
     logger.debug(f"==== args ====\n{args}")
 
-    uvicorn.run("langport.service.openai_api:app", host=args.host, port=args.port, log_level="info", reload=True)
+    uvicorn.run(
+        "langport.service.openai_api:app",
+        host=args.host,
+        port=args.port,
+        log_level="info",
+        reload=True,
+    )

@@ -23,3 +23,13 @@ class RegisterWorkerRequest(BaseModel):
 
 class RemoveWorkerRequest(BaseModel):
     worker_id: str
+
+
+class WorkerAddressRequest(BaseModel):
+    model_name: str
+
+class WorkerAddressResponse(BaseModel):
+    address: str
+
+class ListModelsResponse(BaseModel):
+    models: List[str]

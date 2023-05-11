@@ -9,7 +9,14 @@ import requests
 import uvicorn
 
 from langport.core.controller import Controller
-from langport.protocol.worker_protocol import RegisterWorkerRequest, RemoveWorkerRequest
+from langport.protocol.worker_protocol import (
+    ListModelsResponse,
+    RegisterWorkerRequest,
+    RemoveWorkerRequest,
+    WorkerAddressRequest,
+    WorkerAddressResponse,
+    WorkerHeartbeat,
+)
 from langport.utils import build_logger
 
 
@@ -17,9 +24,11 @@ logger = build_logger("langport.service.controller", "controller.log")
 
 app = FastAPI()
 
+
 @app.post("/register_worker")
 async def register_worker(request: RegisterWorkerRequest):
     app.controller.register_worker(request)
+
 
 @app.post("/remove_worker")
 async def remove_worker(request: RemoveWorkerRequest):
@@ -35,47 +44,25 @@ async def refresh_all_workers():
 @app.post("/list_models")
 async def list_models():
     models = app.controller.list_models()
-    return {"models": models}
+    return ListModelsResponse(models=models)
 
 
 @app.post("/get_worker_address")
-async def get_worker_address(request: Request):
-    data = await request.json()
-    addr = app.controller.get_worker_address(data["model"])
-    return {"address": addr}
+async def get_worker_address(request: WorkerAddressRequest):
+    addr = app.controller.get_worker_address(request.model_name)
+    return WorkerAddressResponse(address=addr)
 
 
 @app.post("/receive_heart_beat")
-async def receive_heart_beat(request: Request):
-    data = await request.json()
-    exist = app.controller.receive_heart_beat(data["worker_name"], data["queue_length"])
+async def receive_heart_beat(request: WorkerHeartbeat):
+    exist = app.controller.receive_heart_beat(request)
     return {"exist": exist}
 
 
-@app.post("/worker_generate_stream")
-async def worker_api_generate_stream(request: Request):
-    params = await request.json()
-    generator = app.controller.worker_api_generate_stream(params)
-    return StreamingResponse(generator)
+@app.post("/get_worker_status")
+async def api_get_worker_status(request: Request):
+    return app.controller.api_get_worker_status()
 
-
-@app.post("/worker_generate_completion")
-async def worker_api_generate_completion(request: Request):
-    params = await request.json()
-    output = app.controller.worker_api_generate_completion(params)
-    return output
-
-
-@app.post("/worker_get_embeddings")
-async def worker_api_embeddings(request: Request):
-    params = await request.json()
-    output = app.controller.worker_api_embeddings(params)
-    return output
-
-
-@app.post("/worker_get_status")
-async def worker_api_get_status(request: Request):
-    return app.controller.worker_api_get_status()
 
 @app.on_event("startup")
 async def startup_event():
@@ -85,6 +72,7 @@ async def startup_event():
 @app.on_event("shutdown")
 def shutdown_event():
     app.controller.stop()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

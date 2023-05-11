@@ -39,6 +39,7 @@ pip install -e .
 python -m langport.service.controller
 python -m langport.service.worker
 python -m langport.service.openai_api
+python -m langport.service.fauxpilot_api
 ```
 
 ## License

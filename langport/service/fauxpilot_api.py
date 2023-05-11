@@ -33,6 +33,7 @@ from langport.protocol.openai_api_protocol import (
     ModelPermission,
     UsageInfo,
 )
+from langport.protocol.worker_protocol import WorkerAddressRequest
 
 logger = logging.getLogger(__name__)
 
@@ -215,11 +216,11 @@ def get_gen_params(
 
 
 @retry(stop=stop_after_attempt(5))
-async def _get_worker_address(model_name: str, client: httpx.AsyncClient) -> str:
+async def _get_worker_address(model_id: str, client: httpx.AsyncClient) -> str:
     """
     Get worker address based on the requested model
 
-    :param model_name: The worker's model name
+    :param model_id: The worker's model id
     :param client: The httpx client to use
     :return: Worker address from the controller
     :raises: :class:`ValueError`: No available worker for requested model
@@ -227,14 +228,14 @@ async def _get_worker_address(model_name: str, client: httpx.AsyncClient) -> str
     controller_address = app_settings.controller_address
 
     ret = await client.post(
-        controller_address + "/get_worker_address", json={"model": model_name}
+        controller_address + "/get_worker_address", json=WorkerAddressRequest(worker_id=model_id)
     )
     worker_addr = ret.json()["address"]
     # No available worker
     if worker_addr == "":
-        raise ValueError(f"No available worker for {model_name}")
+        raise ValueError(f"No available worker for {model_id}")
 
-    logger.debug(f"model_name: {model_name}, worker_addr: {worker_addr}")
+    logger.debug(f"model_id: {model_id}, worker_addr: {worker_addr}")
     return worker_addr
 
 
@@ -387,7 +388,7 @@ if __name__ == "__main__":
         description="FastChat FauxPilot-Compatible RESTful API server."
     )
     parser.add_argument("--host", type=str, default="localhost", help="host name")
-    parser.add_argument("--port", type=int, default=8000, help="port number")
+    parser.add_argument("--port", type=int, default=8005, help="port number")
     parser.add_argument(
         "--controller-address", type=str, default="http://localhost:21001"
     )
