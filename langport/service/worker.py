@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import os
+import random
 import time
 from typing import List, Union
 import threading
@@ -19,30 +20,16 @@ from langport.model.model_adapter import load_model, add_model_args
 from langport.core.inference import generate_stream
 from langport.utils import build_logger, server_error_msg, pretty_print_semaphore
 
-worker_id = str(uuid.uuid4())[:6]
-logger = build_logger("model_worker", f"model_worker_{worker_id}.log")
-global_counter = 0
-
-model_semaphore = None
-
-
-def heart_beat_worker(controller):
-    while True:
-        time.sleep(WORKER_HEART_BEAT_INTERVAL)
-        controller.send_heart_beat()
-
 app = FastAPI()
 
-
 def release_model_semaphore():
-    model_semaphore.release()
+    app.worker.model_semaphore.release()
 
 def acquire_model_semaphore():
-    global model_semaphore, global_counter
-    global_counter += 1
-    if model_semaphore is None:
-        model_semaphore = asyncio.Semaphore(args.limit_model_concurrency)
-    return model_semaphore.acquire()
+    app.worker.global_counter += 1
+    if app.worker.model_semaphore is None:
+        app.worker.model_semaphore = asyncio.Semaphore(args.limit_model_concurrency)
+    return app.worker.model_semaphore.acquire()
 
 def create_background_tasks():
     background_tasks = BackgroundTasks()
@@ -108,8 +95,8 @@ def shutdown_event():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default="localhost")
-    parser.add_argument("--port", type=int, default=21002)
-    parser.add_argument("--worker-address", type=str, default="http://localhost:21002")
+    parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--worker-address", type=str, default=None)
     parser.add_argument(
         "--controller-address", type=str, default="http://localhost:21001"
     )
@@ -119,6 +106,9 @@ if __name__ == "__main__":
     parser.add_argument("--stream-interval", type=int, default=2)
     parser.add_argument("--no-register", action="store_true")
     args = parser.parse_args()
+
+    worker_id = str(uuid.uuid4())
+    logger = build_logger("model_worker", f"model_worker_{worker_id}.log")
     logger.info(f"args: {args}")
 
     if args.gpus:
@@ -127,6 +117,12 @@ if __name__ == "__main__":
                 f"Larger --num-gpus ({args.num_gpus}) than --gpus {args.gpus}!"
             )
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
+
+    if args.port is None:
+        args.port = random.randint(21001, 29001)
+    
+    if args.worker_address is None:
+        args.worker_address = f"http://{args.host}:{args.port}"
 
     app.worker = ModelWorker(
         controller_addr=args.controller_address,

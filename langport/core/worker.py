@@ -12,38 +12,16 @@ import uuid
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 import requests
+from tenacity import retry, stop_after_attempt
 
 from langport.protocol.worker_protocol import RegisterWorkerRequest, RemoveWorkerRequest, WorkerHeartbeat, WorkerStatus
 
-try:
-    from transformers import (
-        AutoTokenizer,
-        AutoModelForCausalLM,
-        LlamaTokenizer,
-        AutoModel,
-    )
-except ImportError:
-    from transformers import (
-        AutoTokenizer,
-        AutoModelForCausalLM,
-        LLaMATokenizer,
-        AutoModel,
-    )
 import torch
-import uvicorn
 
 from langport.constants import WORKER_API_TIMEOUT, WORKER_HEART_BEAT_INTERVAL, WORKER_HEART_BEAT_CHECK_INTERVAL, ErrorCode
 from langport.model.model_adapter import load_model, add_model_args
 from langport.core.inference import generate_stream
-from langport.utils import build_logger, server_error_msg, pretty_print_semaphore
-
-GB = 1 << 30
-
-worker_id = str(uuid.uuid4())[:6]
-global_counter = 0
-
-model_semaphore = None
-
+from langport.utils import server_error_msg, pretty_print_semaphore
 
 def heart_beat_worker(controller: "ModelWorker"):
     last_time = time.time()
@@ -51,7 +29,10 @@ def heart_beat_worker(controller: "ModelWorker"):
         time.sleep(WORKER_HEART_BEAT_CHECK_INTERVAL)
         now_time = time.time()
         if now_time - last_time > WORKER_HEART_BEAT_INTERVAL:
-            controller.send_heart_beat()
+            try:
+                controller.send_heart_beat()
+            except requests.exceptions.RequestException as e:
+                controller.logger.error(f"heart beat error: {e}")
             last_time = now_time
 
 
@@ -63,11 +44,11 @@ class ModelWorker(object):
         worker_id: str,
         model_path: str,
         model_name: str,
-        device,
-        num_gpus,
+        device: str,
+        num_gpus: int,
         max_gpu_memory,
-        load_8bit,
-        cpu_offloading,
+        load_8bit: bool,
+        cpu_offloading: bool,
         limit_model_concurrency: int,
         stream_interval: int,
         logger,
@@ -83,6 +64,10 @@ class ModelWorker(object):
         self.stream_interval=stream_interval
         self.logger = logger
 
+        self.global_counter = 0
+        self.model_semaphore = None
+
+
         self.logger.info(f"Loading the model {self.model_name} on worker {worker_id} ...")
         self.model, self.tokenizer = load_model(
             model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading
@@ -95,7 +80,6 @@ class ModelWorker(object):
         else:
             self.context_len = 2048
 
-        # generate_stream
         self.generate_stream_func = generate_stream
     
         self.online = False
@@ -147,50 +131,45 @@ class ModelWorker(object):
         r = requests.post(url, json=data.dict(), timeout=WORKER_API_TIMEOUT)
         assert r.status_code == 200
 
+    @retry(stop=stop_after_attempt(5))
     def send_heart_beat(self):
         self.logger.info(
             f"Send heart beat. Models: {[self.model_name]}. "
-            f"Semaphore: {pretty_print_semaphore(model_semaphore)}. "
-            f"global_counter: {global_counter}"
+            f"Semaphore: {pretty_print_semaphore(self.model_semaphore)}. "
+            f"global_counter: {self.global_counter}"
         )
 
         url = self.controller_addr + "/receive_heart_beat"
 
-        while True:
-            try:
-                ret = requests.post(
-                    url,
-                    json=WorkerHeartbeat(
-                        worker_id=self.worker_id,
-                        status=WorkerStatus(
-                            model_name=self.model_name,
-                            speed=1,
-                            queue_length=self.get_queue_length(),
-                        )
-                    ),
-                    timeout=WORKER_API_TIMEOUT,
+        ret = requests.post(
+            url,
+            json=WorkerHeartbeat(
+                worker_id=self.worker_id,
+                status=WorkerStatus(
+                    model_name=self.model_name,
+                    speed=1,
+                    queue_length=self.get_queue_length(),
                 )
-                exist = ret.json()["exist"]
-                break
-            except requests.exceptions.RequestException as e:
-                self.logger.error(f"heart beat error: {e}")
-            time.sleep(5)
+            ),
+            timeout=WORKER_API_TIMEOUT,
+        )
+        exist = ret.json()["exist"]
 
         if not exist:
             self.register_to_controller()
 
     def get_queue_length(self):
         if (
-            model_semaphore is None
-            or model_semaphore._value is None
-            or model_semaphore._waiters is None
+            self.model_semaphore is None
+            or self.model_semaphore._value is None
+            or self.model_semaphore._waiters is None
         ):
             return 0
         else:
             return (
                 self.limit_model_concurrency
-                - model_semaphore._value
-                + len(model_semaphore._waiters)
+                - self.model_semaphore._value
+                + len(self.model_semaphore._waiters)
             )
 
     def get_status(self) -> WorkerStatus:

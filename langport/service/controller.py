@@ -90,7 +90,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default="localhost")
     parser.add_argument("--port", type=int, default=21001)
-    parser.add_argument("--controller-addr", type=str, default="http://localhost:21001")
     parser.add_argument(
         "--dispatch-method",
         type=str,

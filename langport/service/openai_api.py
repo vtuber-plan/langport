@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 import httpx
 import shortuuid
+from tenacity import retry, stop_after_attempt
 import uvicorn
 from pydantic import BaseSettings
 
@@ -217,7 +218,7 @@ def get_gen_params(
     logger.debug(f"==== request ====\n{gen_params}")
     return gen_params
 
-
+@retry(stop=stop_after_attempt(5))
 async def _get_worker_address(model_name: str, client: httpx.AsyncClient) -> str:
     """
     Get worker address based on the requested model
