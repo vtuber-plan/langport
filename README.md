@@ -3,8 +3,9 @@ LangPort is a open-source large language model serving platform.
 It is inspired by project [lmsys/fastchat](https://github.com/lm-sys/FastChat), we hope that the serving platform is lightweight and fast, but fastchat includes other features such as training and evaluation make it complicate.
 
 The core features include:
-- The fast inference for state-of-the-art models.
-- A distributed serving system with OpenAI-Compatible RESTful APIs.
+- A distributed serving system for state-of-the-art models.
+- OpenAI-Compatible RESTful APIs.
+- FauxPilot-Compatible RESTful APIs.
 
 ## News
 - [2023/05/10] langport project started.
@@ -39,3 +40,13 @@ python -m langport.service.controller
 python -m langport.service.worker
 python -m langport.service.openai_api
 ```
+
+## License
+
+langport is released under the MIT License.
+
+
+## See also
+
+- [langport-docs](https://langport.readthedocs.io/)
+- [langport-source](https://github.com/vtuber-plan/langport)
