@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 import requests
 
-from langport.core.worker import ModelWorker
+from langport.core.generation_worker import ModelWorker
 
 import uvicorn
 
