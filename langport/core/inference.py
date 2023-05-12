@@ -28,11 +28,6 @@ from transformers.generation.logits_process import (
     TopPLogitsWarper,
 )
 from langport.constants import ErrorCode
-from langport.core.generation_worker import (
-    GenerationTask,
-    GenerationTaskStreamOutput,
-    UsageInfo,
-)
 
 from langport.data.conversation import get_conv_template, SeparatorStyle
 from langport.model.model_adapter import load_model, get_conversation_template

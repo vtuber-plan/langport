@@ -49,7 +49,7 @@ async def list_models():
 
 @app.post("/get_worker_address")
 async def get_worker_address(request: WorkerAddressRequest):
-    addr = app.controller.get_worker_address(request.model_name)
+    addr = app.controller.get_worker_address(request.model_name, request.worker_type)
     return WorkerAddressResponse(address=addr)
 
 

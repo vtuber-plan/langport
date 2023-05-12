@@ -68,12 +68,12 @@ async def validation_exception_handler(request, exc):
     return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
 
 
-async def check_model(request) -> Optional[JSONResponse]:
+async def check_model(request, request_type: str) -> Optional[JSONResponse]:
     controller_address = app_settings.controller_address
     ret = None
     async with httpx.AsyncClient() as client:
         try:
-            _worker_addr = await _get_worker_address(request.model, client)
+            _worker_addr = await _get_worker_address(request.model, request_type, client)
         except:
             models_ret = await client.post(controller_address + "/list_models")
             models = models_ret.json()["models"]
@@ -84,9 +84,9 @@ async def check_model(request) -> Optional[JSONResponse]:
     return ret
 
 
-async def check_length(request, prompt, max_tokens):
+async def check_length(request, request_type: str, prompt, max_tokens):
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(request.model, client)
+        worker_addr = await _get_worker_address(request.model, request_type, client)
 
         response = await client.post(
             worker_addr + "/model_details",
@@ -224,7 +224,7 @@ def get_gen_params(
 
 
 @retry(stop=stop_after_attempt(5))
-async def _get_worker_address(model_name: str, client: httpx.AsyncClient) -> str:
+async def _get_worker_address(model_name: str, worker_type: str, client: httpx.AsyncClient) -> str:
     """
     Get worker address based on the requested model
 
@@ -237,7 +237,7 @@ async def _get_worker_address(model_name: str, client: httpx.AsyncClient) -> str
 
     ret = await client.post(
         controller_address + "/get_worker_address",
-        json=WorkerAddressRequest(model_name=model_name).dict(),
+        json=WorkerAddressRequest(model_name=model_name, worker_type=worker_type).dict(),
     )
     worker_addr = ret.json()["address"]
     # No available worker
@@ -266,7 +266,7 @@ async def show_available_models():
 @app.post("/v1/chat/completions")
 async def create_chat_completion(request: ChatCompletionRequest):
     """Creates a completion for the chat message"""
-    error_check_ret = await check_model(request)
+    error_check_ret = await check_model(request, "generation")
     if error_check_ret is not None:
         return error_check_ret
     error_check_ret = check_requests(request)
@@ -372,7 +372,7 @@ async def chat_completion_stream_generator(
 async def chat_completion_stream(model_name: str, gen_params: Dict[str, Any]):
     controller_url = app_settings.controller_address
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(model_name, client)
+        worker_addr = await _get_worker_address(model_name, "generation", client)
         delimiter = b"\0"
         async with client.stream(
             "POST",
@@ -394,7 +394,7 @@ async def chat_completion(
     model_name: str, gen_params: Dict[str, Any]
 ) -> Optional[Dict[str, Any]]:
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(model_name, client)
+        worker_addr = await _get_worker_address(model_name, "generation", client)
 
         output = None
         delimiter = b"\0"
@@ -419,7 +419,7 @@ async def chat_completion(
 
 @app.post("/v1/completions")
 async def create_completion(request: CompletionRequest):
-    error_check_ret = await check_model(request)
+    error_check_ret = await check_model(request, "generation")
     if error_check_ret is not None:
         return error_check_ret
     error_check_ret = check_requests(request)
@@ -511,7 +511,7 @@ async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
 async def generate_completion_stream(payload: Dict[str, Any]):
     controller_address = app_settings.controller_address
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(payload["model"], client)
+        worker_addr = await _get_worker_address(payload["model"], "generation", client)
 
         delimiter = b"\0"
         async with client.stream(
@@ -533,7 +533,7 @@ async def generate_completion_stream(payload: Dict[str, Any]):
 async def generate_completion(payload: Dict[str, Any]):
     controller_address = app_settings.controller_address
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(payload["model"], client)
+        worker_addr = await _get_worker_address(payload["model"], "generation", client)
 
         response = await client.post(
             worker_addr + "/completion",
@@ -548,7 +548,7 @@ async def generate_completion(payload: Dict[str, Any]):
 @app.post("/v1/embeddings")
 async def create_embeddings(request: EmbeddingsRequest):
     """Creates embeddings for the text"""
-    error_check_ret = await check_model(request)
+    error_check_ret = await check_model(request, "embedding")
     if error_check_ret is not None:
         return error_check_ret
     payload = {
@@ -563,8 +563,8 @@ async def create_embeddings(request: EmbeddingsRequest):
         data=data,
         model=request.model,
         usage=UsageInfo(
-            prompt_tokens=embedding["token_num"],
-            total_tokens=embedding["token_num"],
+            prompt_tokens=embedding["usage"]["prompt_tokens"],
+            total_tokens=embedding["usage"]["total_tokens"],
             completion_tokens=None,
         ),
     ).dict(exclude_none=True)
@@ -574,10 +574,10 @@ async def get_embedding(payload: Dict[str, Any]):
     controller_address = app_settings.controller_address
     model_name = payload["model"]
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(model_name, client)
+        worker_addr = await _get_worker_address(model_name, "embedding", client)
 
         response = await client.post(
-            worker_addr + "/worker_get_embeddings",
+            worker_addr + "/embeddings",
             headers=headers,
             json=payload,
             timeout=WORKER_API_TIMEOUT,

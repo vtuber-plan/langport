@@ -36,6 +36,7 @@ class DispatchMethod(Enum):
 @dataclasses.dataclass
 class WorkerInfo:
     worker_id: str
+    worker_type: str
     worker_addr: str
     status: Optional[WorkerStatus]
     update_time: int
@@ -75,6 +76,7 @@ class Controller(object):
 
     def register_worker(self, request: RegisterWorkerRequest) -> bool:
         worker_id = request.worker_id
+        worker_type = request.worker_type
         worker_addr = request.worker_addr
         if worker_id not in self.worker_info:
             self.logger.info(f"Register a new worker: {worker_id}")
@@ -83,6 +85,7 @@ class Controller(object):
 
         self.worker_info[worker_id] = WorkerInfo(
             worker_id=request.worker_id,
+            worker_type=request.worker_type,
             worker_addr=request.worker_addr,
             status=request.worker_status,
             update_time=time.time()
@@ -116,12 +119,7 @@ class Controller(object):
         return WorkerStatus.parse_obj(r.json())
 
     def refresh_all_workers(self):
-        old_info = dict(self.worker_info)
-        self.worker_info = {}
-
-        for w_name, w_info in old_info.items():
-            if not self.register_worker(w_name, w_info.check_heart_beat, None):
-                self.logger.info(f"Remove stale worker: {w_name}")
+        pass
 
     def list_models(self):
         model_names = set()
@@ -131,12 +129,12 @@ class Controller(object):
 
         return list(model_names)
 
-    def get_worker_address(self, model_name: str) -> str:
+    def get_worker_address(self, model_name: str, worker_type: str) -> str:
         if self.dispatch_method == DispatchMethod.LOTTERY:
             worker_names = []
             worker_speeds = []
             for w_name, w_info in self.worker_info.items():
-                if model_name in w_info.model_names:
+                if model_name == w_info.status.model_name and worker_type == w_info.worker_type:
                     worker_names.append(w_name)
                     worker_speeds.append(w_info.status.speed)
             worker_speeds = np.array(worker_speeds, dtype=np.float32)
@@ -144,27 +142,10 @@ class Controller(object):
             if norm < 1e-4:
                 return ""
             worker_speeds = worker_speeds / norm
-            if True:  # Directly return address
-                pt = np.random.choice(np.arange(len(worker_names)), p=worker_speeds)
-                worker_name = worker_names[pt]
-                return worker_name
-
-            # Check status before returning
-            while True:
-                pt = np.random.choice(np.arange(len(worker_names)), p=worker_speeds)
-                worker_name = worker_names[pt]
-
-                if self.get_worker_status(worker_name):
-                    break
-                else:
-                    self.remove_worker(worker_name)
-                    worker_speeds[pt] = 0
-                    norm = np.sum(worker_speeds)
-                    if norm < 1e-4:
-                        return ""
-                    worker_speeds = worker_speeds / norm
-                    continue
+            pt = np.random.choice(np.arange(len(worker_names)), p=worker_speeds)
+            worker_name = worker_names[pt]
             return worker_name
+
         elif self.dispatch_method == DispatchMethod.SHORTEST_QUEUE:
             worker_ids = []
             worker_qlen = []

@@ -37,7 +37,8 @@ pip install -e .
 
 ``` bash
 python -m langport.service.controller
-python -m langport.service.worker
+python -m langport.service.embedding_worker
+python -m langport.service.generation_worker
 python -m langport.service.openai_api
 python -m langport.service.fauxpilot_api
 ```

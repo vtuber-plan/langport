@@ -11,6 +11,7 @@ WORKER_API_TIMEOUT = 20
 LOGDIR = "./logs"
 
 class ErrorCode(IntEnum):
+    OK = 200
     VALIDATION_TYPE_ERROR = 40001
 
     INVALID_AUTH_KEY = 40101
