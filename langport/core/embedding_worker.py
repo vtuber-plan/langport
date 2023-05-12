@@ -39,27 +39,29 @@ from langport.model.model_adapter import load_model
 from langport.utils import server_error_msg, pretty_print_semaphore
 
 
-def inference_server(controller: "EmbeddingModelWorker"):
-    if not controller.online:
+def inference_embeddings(worker: "EmbeddingModelWorker"):
+    if not worker.online:
         return
-    tasks = controller.fetch_tasks()
+    tasks = worker.fetch_tasks()
     batch_size = len(tasks)
     if batch_size == 0:
         return
+    
     prompts = [task.input for task in tasks]
     try:
-        tokenizer = controller.tokenizer
-        input_ids = tokenizer.encode(prompts, return_tensors="pt").to(controller.device)
-        model_output = controller.model(input_ids, output_hidden_states=True)
-        is_chatglm = "chatglm" in str(type(controller.model)).lower()
-        if is_chatglm:
-            data = model_output.hidden_states[-1].transpose(0, 1)
-        else:
-            data = model_output.hidden_states[-1]
+        tokenizer = worker.model_holder.tokenizer
+        model = worker.model_holder.model
+        input_ids = tokenizer.encode(prompts, return_tensors="pt").to(worker.device)
+        model_output = model(input_ids, output_hidden_states=True)
+        # is_chatglm = "chatglm" in str(type(model)).lower()
+        # if is_chatglm:
+        #     data = model_output.hidden_states[-1].transpose(0, 1)
+        # else:
+        data = model_output.hidden_states[-1]
         embeddings = torch.mean(data, dim=1)
         for i in range(batch_size):
-            token_num = len(controller.tokenizer(prompts[i]).input_ids)
-            controller.push_task_result(
+            token_num = len(tokenizer(prompts[i]).input_ids)
+            worker.push_task_result(
                 tasks[i].task_id,
                 EmbeddingWorkerResult(
                     task_id=tasks[i].task_id,
@@ -71,7 +73,7 @@ def inference_server(controller: "EmbeddingModelWorker"):
 
     except torch.cuda.OutOfMemoryError:
         for i in range(batch_size):
-            controller.push_task_result(
+            worker.push_task_result(
                 tasks[i].task_id,
                 BaseWorkerResult(
                     task_id=tasks[i].task_id,
@@ -81,7 +83,7 @@ def inference_server(controller: "EmbeddingModelWorker"):
             )
     except Exception as e:
         for i in range(batch_size):
-            controller.push_task_result(
+            worker.push_task_result(
                 tasks[i].task_id,
                 BaseWorkerResult(
                     task_id=tasks[i].task_id,
@@ -91,7 +93,7 @@ def inference_server(controller: "EmbeddingModelWorker"):
             )
     
     for i in range(batch_size):
-        controller.push_task_result(
+        worker.push_task_result(
             tasks[i].task_id,
             BaseWorkerResult(
                 task_id=tasks[i].task_id,
@@ -136,7 +138,7 @@ class EmbeddingModelWorker(BaseModelWorker):
             stream_interval=stream_interval,
             logger=logger,
         )
-        self.add_timer("embeddings_inference", 0.5, inference_server)
+        self.add_timer("embeddings_inference", 0.5, inference_embeddings)
 
     async def get_embeddings(self, task: EmbeddingsTask):
         self.add_task(task)

@@ -32,7 +32,11 @@ class IntervalTimer(object):
                     finish_time = time.time()
                     self.last_time = finish_time
                     if finish_time - start_time > self.interval:
-                        print(f"Overloaded!! Last timer using {finish_time - start_time}s.")     
+                        print(f"Overloaded!! Last timer using {finish_time - start_time}s.")
+                    else:
+                        time.sleep(0.01)
+                else:
+                    time.sleep(0.01)
             else:
                 break
-            time.sleep(0.01)
+            

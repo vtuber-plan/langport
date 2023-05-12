@@ -161,7 +161,7 @@ def load_model(
     if debug:
         print(model)
 
-    return model, tokenizer
+    return adapter, model, tokenizer
 
 
 def get_conversation_template(model_path: str) -> Conversation:

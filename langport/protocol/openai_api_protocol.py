@@ -101,10 +101,14 @@ class EmbeddingsRequest(BaseModel):
     input: str
     user: Optional[str] = None
 
+class EmbeddingsData(BaseModel):
+    object: str = "embedding"
+    embedding: List[float]
+    index: int
 
 class EmbeddingsResponse(BaseModel):
     object: str = "list"
-    data: List[Dict[str, Any]]
+    data: List[EmbeddingsData]
     model: str
     usage: UsageInfo
 

@@ -20,27 +20,16 @@ from langport.utils import build_logger
 app = FastAPI()
 
 
-def release_model_semaphore():
-    app.worker.model_semaphore.release()
-
-
-def acquire_model_semaphore():
-    app.worker.global_counter += 1
-    if app.worker.model_semaphore is None:
-        app.worker.model_semaphore = asyncio.Semaphore(args.limit_model_concurrency)
-    return app.worker.model_semaphore.acquire()
-
-
-def create_background_tasks():
+def create_background_tasks(worker):
     background_tasks = BackgroundTasks()
-    background_tasks.add_task(release_model_semaphore)
+    background_tasks.add_task(lambda: worker.release_model_semaphore())
     return background_tasks
 
 @app.post("/embeddings")
 async def api_embeddings(request: EmbeddingsTask):
-    await acquire_model_semaphore()
+    await app.worker.acquire_model_semaphore()
     embedding = await app.worker.get_embeddings(request)
-    background_tasks = create_background_tasks()
+    background_tasks = create_background_tasks(app.worker)
     return JSONResponse(content=embedding.json(), background=background_tasks)
 
 

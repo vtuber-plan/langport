@@ -49,14 +49,14 @@ class EmbeddingsTask(BaseWorkerTask):
 
 class GenerationTask(BaseWorkerTask):
     prompt: str
-    temperature: float
-    repetition_penalty: float
-    top_p: float
-    top_k: float
-    max_new_tokens: int
-    stop: Union[List[str], str]
-    echo: bool
-    stop_token_ids: List[int]
+    temperature: Optional[float] = 0.7
+    repetition_penalty: Optional[float] = 0.0
+    top_p: Optional[float] = 1.0
+    top_k: Optional[int] = 1
+    max_new_tokens: Optional[int] = None
+    stop: Optional[Union[List[str], str]] = None
+    echo: Optional[bool] = False
+    stop_token_ids: Optional[List[int]] = None
 
 class UsageInfo(BaseModel):
     prompt_tokens: int = 0
@@ -72,4 +72,10 @@ class BaseWorkerResult(BaseModel):
 
 class EmbeddingWorkerResult(BaseWorkerResult):
     embedding: List[float]
+    usage: UsageInfo
+
+class GenerationWorkerResult(BaseWorkerResult):
+    text: str
+    logprobs: Optional[int] = None
+    finish_reason: Optional[Literal["stop", "length"]] = None
     usage: UsageInfo

@@ -33,6 +33,7 @@ from langport.protocol.openai_api_protocol import (
     DeltaMessage,
     CompletionResponseStreamChoice,
     CompletionStreamResponse,
+    EmbeddingsData,
     EmbeddingsRequest,
     EmbeddingsResponse,
     ErrorResponse,
@@ -558,9 +559,11 @@ async def create_embeddings(request: EmbeddingsRequest):
 
     embedding = await get_embedding(payload)
     embedding = json.loads(embedding)
-    data = [{"object": "embedding", "embedding": embedding["embedding"], "index": 0}]
     return EmbeddingsResponse(
-        data=data,
+        data=[EmbeddingsData(
+            embedding=embedding["embedding"],
+            index=0
+        )],
         model=request.model,
         usage=UsageInfo(
             prompt_tokens=embedding["usage"]["prompt_tokens"],

@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 import requests
 from tenacity import retry, stop_after_attempt
+from langport.model.model_holder import LanguageModelHolder
 
 from langport.protocol.worker_protocol import (
     BaseWorkerResult,
@@ -89,21 +90,23 @@ class BaseModelWorker(object):
         self.logger.info(
             f"Loading the model {self.model_name} on worker {worker_id} ..."
         )
-        self.model, self.tokenizer = load_model(
-            model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading
+
+        self.model_holder = LanguageModelHolder(
+            model_path=model_path,
+            model_name=model_name,
+            device=device,
+            num_gpus=num_gpus,
+            max_gpu_memory=max_gpu_memory,
+            load_8bit=load_8bit,
+            cpu_offloading=cpu_offloading
         )
 
-        if hasattr(self.model.config, "max_sequence_length"):
-            self.context_len = self.model.config.max_sequence_length
-        elif hasattr(self.model.config, "max_position_embeddings"):
-            self.context_len = self.model.config.max_position_embeddings
-        else:
-            self.context_len = 2048
+        self.context_len = self.model_holder.context_len
 
         self.task_queue: List[BaseWorkerTask] = []
         self.task_output: Dict[str, List[BaseWorkerResult]] = {}
 
-        self.timers: Dict[str, threading.Timer] = {}
+        self.timers: Dict[str, IntervalTimer] = {}
 
         self.online = False
 
@@ -124,6 +127,16 @@ class BaseModelWorker(object):
         self.timers.clear()
         self.remove_from_controller()
         self.online = False
+    
+    def release_model_semaphore(self):
+        self.model_semaphore.release()
+
+
+    def acquire_model_semaphore(self):
+        self.global_counter += 1
+        if self.model_semaphore is None:
+            self.model_semaphore = asyncio.Semaphore(self.limit_model_concurrency)
+        return self.model_semaphore.acquire()
 
     def add_timer(self, name: str, interval: float, fn: Callable[["BaseModelWorker"], None]) -> bool:
         if name in self.timers:
@@ -185,7 +198,7 @@ class BaseModelWorker(object):
                     speed=1,
                     queue_length=self.get_queue_length(),
                 ),
-            ),
+            ).dict(),
             timeout=WORKER_API_TIMEOUT,
         )
         exist = ret.json()["exist"]
