@@ -48,7 +48,7 @@ async def api_chat(request: Request):
 @app.post("/completion_stream")
 async def api_completion_stream(request: Request):
     params = await request.json()
-    await app.worker.acquire_model_semaphore()
+    # await app.worker.acquire_model_semaphore()
     generator = app.worker.generation_bytes_stream(GenerationTask(
         prompt=params["prompt"],
         temperature=params.get("temperature", 1.0),
@@ -60,8 +60,9 @@ async def api_completion_stream(request: Request):
         echo=params.get("echo", False),
         stop_token_ids=params.get("stop_token_ids", None),
     ))
-    background_tasks = create_background_tasks(app.worker)
-    return StreamingResponse(generator, background=background_tasks)
+    # background_tasks = create_background_tasks(app.worker)
+    # return StreamingResponse(generator, background=background_tasks)
+    return StreamingResponse(generator)
 
 
 @app.post("/completion")

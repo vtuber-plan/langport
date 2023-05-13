@@ -143,7 +143,7 @@ class BaseModelWorker(object):
     def add_timer(self, name: str, interval: float, fn: Callable[["BaseModelWorker"], None]) -> bool:
         if name in self.timers:
             return False
-        new_timer = IntervalTimer(interval=interval, fn=fn, args=(self,))
+        new_timer = IntervalTimer(interval=interval, fn=fn, max_workers=self.limit_model_concurrency, args=(self,))
         self.timers[name] = new_timer
         new_timer.start()
         return True
@@ -237,10 +237,11 @@ class BaseModelWorker(object):
     def fetch_task_result(self, task_id: str):
         result_queue = self.output_queue[task_id]
         while True:
-            if result_queue.empty():
+            try:
+                event = result_queue.get(block=False, timeout=None)
+            except queue.Empty:
                 time.sleep(0.05)
                 continue
-            event = result_queue.get(block=True, timeout=WORKER_API_TIMEOUT)
             if event.type == "done":
                 break
             elif event.type == "error":
@@ -255,8 +256,11 @@ class BaseModelWorker(object):
     
     def fetch_tasks(self) -> List[BaseWorkerResult]:
         task_batch = []
-        while len(task_batch) <= self.max_batch_size and not self.task_queue.empty():
-            task = self.task_queue.get(block=True, timeout=WORKER_API_TIMEOUT)
+        while len(task_batch) <= self.max_batch_size:
+            try:
+                task = self.task_queue.get(block=False, timeout=None)
+            except queue.Empty:
+                break
             task_batch.append(task)
         return task_batch
     

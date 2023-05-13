@@ -8,6 +8,7 @@ import time
 from typing import List, Optional, Union
 import threading
 import uuid
+import traceback
 
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -143,16 +144,14 @@ def batch_generation(
                 decoder_input_ids=decoder_input_ids,
                 past_key_values=past_key_values,
             )
-            logits = out.logits
-            past_key_values = out.past_key_values
         else:
             out = model(
                 input_ids=decoder_input_ids,
                 use_cache=True,
                 past_key_values=past_key_values,
             )
-            logits = out.logits
-            past_key_values = out.past_key_values
+        logits = out.logits
+        past_key_values = out.past_key_values
 
         new_ids = []
         current_len = input_ids.shape[1]
@@ -194,14 +193,10 @@ def batch_generation(
             else:
                 is_stop[i] = False
 
-        if batch_size == 1:
-            new_ids_tensor = torch.tensor(
-                new_ids, dtype=torch.long, device=input_ids.device
-            ).unsqueeze(0)
-        else:
-            new_ids_tensor = torch.tensor(
-                new_ids, dtype=torch.long, device=input_ids.device
-            )
+        new_ids_tensor = torch.tensor(
+            new_ids, dtype=torch.long, device=input_ids.device
+        ).unsqueeze(1)
+
         input_ids = torch.cat(
             (input_ids, new_ids_tensor),
             dim=1,
@@ -209,14 +204,13 @@ def batch_generation(
         decoder_input_ids = new_ids_tensor
 
         for i in range(batch_size):
+            task = tasks[i]
             if step % stream_interval == 0 or is_stop[i]:
                 if tasks[i].echo:
                     tmp_output_ids = input_ids[i, :]
-                    rfind_start = length[i]
                 else:
                     tmp_output_ids = input_ids[i, length[i]:]
-                    rfind_start = 0
-                output = tokenizer.decode(input_ids[i, :], skip_special_tokens=True)
+                output = tokenizer.decode(tmp_output_ids, skip_special_tokens=True)
 
                 # stop by stopwords
                 
@@ -263,6 +257,7 @@ def inference_generation(worker: "GenerationModelWorker"):
     batch_size = len(tasks)
     if batch_size == 0:
         return
+
     for chunk in batch_generation(
         worker.model_holder.model,
         worker.model_holder.tokenizer,
@@ -271,8 +266,6 @@ def inference_generation(worker: "GenerationModelWorker"):
         tasks,
     ):
         worker.push_task_result(chunk.task_id, chunk)
-
-
 
 class GenerationModelWorker(BaseModelWorker):
     def __init__(
