@@ -66,7 +66,7 @@ class UsageInfo(BaseModel):
 class BaseWorkerResult(BaseModel):
     task_id: str = Field(default_factory=lambda: f"task-{shortuuid.random()}")
     created: int = Field(default_factory=lambda: int(time.time()))
-    type: Literal["data", "error", "done"]
+    type: Literal["data", "error", "finish", "done"]
     message: Optional[str] = None
     error_code: int = ErrorCode.OK
 

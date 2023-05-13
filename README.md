@@ -4,11 +4,13 @@ It is inspired by project [lmsys/fastchat](https://github.com/lm-sys/FastChat), 
 
 The core features include:
 - A distributed serving system for state-of-the-art models.
+- Streaming batch inference for higher throughput.
 - OpenAI-Compatible RESTful APIs.
 - FauxPilot-Compatible RESTful APIs.
 
 ## News
 - [2023/05/10] langport project started.
+- [2023/05/14] batch inference supported.
 
 
 ## Install

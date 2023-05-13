@@ -57,6 +57,10 @@ from langport.model.model_adapter import load_model
 from langport.utils import server_error_msg, pretty_print_semaphore
 
 
+GENERATION_INFERENCE_INTERVAL = 0.05
+GENERATION_MAX_DELAY = 1
+
+
 def prepare_logits_processor(
     temperature: float, repetition_penalty: float, top_p: float, top_k: int
 ) -> LogitsProcessorList:
@@ -104,7 +108,7 @@ def batch_generation(
         each_input_ids = each_inputs.input_ids.squeeze(0)
         inputs.append(each_input_ids)
         length.append(len(each_input_ids))
-    
+
     # padding to max(length)
     if tokenizer._pad_token is None:
         pad_fill_id = tokenizer.eos_token_id
@@ -114,7 +118,7 @@ def batch_generation(
         (batch_size, max(length)), pad_fill_id, dtype=torch.long, device=device
     )
     for i in range(batch_size):
-        full_input_ids[i, :length[i]] = inputs[i]
+        full_input_ids[i, : length[i]] = inputs[i]
 
     # needed variables
     input_ids = full_input_ids[:, : min(length)]
@@ -209,11 +213,11 @@ def batch_generation(
                 if tasks[i].echo:
                     tmp_output_ids = input_ids[i, :]
                 else:
-                    tmp_output_ids = input_ids[i, length[i]:]
+                    tmp_output_ids = input_ids[i, length[i] :]
                 output = tokenizer.decode(tmp_output_ids, skip_special_tokens=True)
 
                 # stop by stopwords
-                
+
                 yield GenerationWorkerResult(
                     task_id=task.task_id,
                     type="data",
@@ -223,7 +227,7 @@ def batch_generation(
                         total_tokens=length[i] + step,
                         completion_tokens=step,
                     ),
-                    finish_reason=None
+                    finish_reason=None,
                 )
 
             if is_stop[i]:
@@ -233,16 +237,15 @@ def batch_generation(
                     finish_reason = "stop"
                 yield GenerationWorkerResult(
                     task_id=task.task_id,
-                    type="data",
+                    type="finish",
                     text=output,
                     usage=UsageInfo(
                         prompt_tokens=length[i],
                         total_tokens=length[i] + step,
                         completion_tokens=step,
                     ),
-                    finish_reason=finish_reason
+                    finish_reason=finish_reason,
                 )
-                yield BaseWorkerResult(task_id=task.task_id, type="done")
 
         if all(is_stop):
             break
@@ -253,10 +256,20 @@ def batch_generation(
 def inference_generation(worker: "GenerationModelWorker"):
     if not worker.online:
         return
+
+    now_time = time.time()
+    dyna_time = (
+        -GENERATION_MAX_DELAY * worker.task_queue.qsize() / worker.max_batch_size
+        + GENERATION_MAX_DELAY
+    )
+    if now_time - worker._last_inference_time < dyna_time:
+        return
     tasks = worker.fetch_tasks()
     batch_size = len(tasks)
     if batch_size == 0:
         return
+
+    worker._last_inference_time = now_time
 
     for chunk in batch_generation(
         worker.model_holder.model,
@@ -266,6 +279,12 @@ def inference_generation(worker: "GenerationModelWorker"):
         tasks,
     ):
         worker.push_task_result(chunk.task_id, chunk)
+
+    for task in tasks:
+        worker.push_task_result(
+            task.task_id, BaseWorkerResult(task_id=task.task_id, type="done")
+        )
+
 
 class GenerationModelWorker(BaseModelWorker):
     def __init__(
@@ -303,8 +322,11 @@ class GenerationModelWorker(BaseModelWorker):
             stream_interval=stream_interval,
             logger=logger,
         )
-        self.add_timer("generation_inference", 0.5, inference_generation)
-    
+        self.add_timer(
+            "generation_inference", GENERATION_INFERENCE_INTERVAL, inference_generation
+        )
+        self._last_inference_time = time.time()
+
     def generation_stream(self, task: GenerationTask):
         self.add_task(task)
         for chunk in self.fetch_task_result(task.task_id):

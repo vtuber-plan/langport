@@ -43,6 +43,7 @@ from langport.protocol.openai_api_protocol import (
     UsageInfo,
 )
 from langport.protocol.worker_protocol import (
+    BaseWorkerResult,
     EmbeddingWorkerResult,
     GenerationWorkerResult,
     WorkerAddressRequest,
@@ -305,22 +306,20 @@ async def create_chat_completion(request: ChatCompletionRequest):
     for i in range(request.n):
         content = asyncio.create_task(chat_completion(request.model, gen_params))
         chat_completions.append(content)
-    try:
-        all_tasks = await asyncio.gather(*chat_completions)
-    except Exception as e:
-        return create_error_response(ErrorCode.INTERNAL_ERROR, str(e))
+
     usage = UsageInfo()
-    for i, content in enumerate(all_tasks):
-        if content["error_code"] != ErrorCode.OK:
-            return create_error_response(content["error_code"], content["text"])
+    for i, content_task in enumerate(chat_completions):
+        content = await content_task
+        if content.error_code != ErrorCode.OK:
+            return create_error_response(content.error_code, content.message)
         choices.append(
             ChatCompletionResponseChoice(
                 index=i,
-                message=ChatMessage(role="assistant", content=content["text"]),
-                finish_reason=content.get("finish_reason", "stop"),
+                message=ChatMessage(role="assistant", content=content.text),
+                finish_reason=content.finish_reason,
             )
         )
-        task_usage = UsageInfo.parse_obj(content["usage"])
+        task_usage = UsageInfo.parse_obj(content.usage)
         for usage_key, usage_value in task_usage.dict().items():
             setattr(usage, usage_key, getattr(usage, usage_key) + usage_value)
 
@@ -349,12 +348,12 @@ async def chat_completion_stream_generator(
         yield f"data: {chunk.json(exclude_unset=True, ensure_ascii=False)}\n\n"
 
         previous_text = ""
-        async for content in chat_completion_stream(model_name, gen_params):
-            if content["error_code"] != ErrorCode.OK:
-                yield f"data: {json.dumps(content, ensure_ascii=False)}\n\n"
+        async for content in generate_completion_stream("/chat_stream", gen_params):
+            if content.error_code != ErrorCode.OK:
+                yield f"data: {json.dumps(content.dict(), ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
                 return
-            decoded_unicode = content["text"].replace("\ufffd", "")
+            decoded_unicode = content.text.replace("\ufffd", "")
             delta_text = decoded_unicode[len(previous_text) :]
             previous_text = decoded_unicode
 
@@ -363,13 +362,13 @@ async def chat_completion_stream_generator(
             choice_data = ChatCompletionResponseStreamChoice(
                 index=i,
                 delta=DeltaMessage(content=delta_text),
-                finish_reason=content.get("finish_reason", None),
+                finish_reason=content.finish_reason,
             )
             chunk = ChatCompletionStreamResponse(
                 id=id, choices=[choice_data], model=model_name
             )
             if delta_text is None:
-                if content.get("finish_reason", None) is not None:
+                if content.finish_reason is not None:
                     finish_stream_events.append(chunk)
                 continue
             yield f"data: {chunk.json(exclude_unset=True, ensure_ascii=False)}\n\n"
@@ -379,32 +378,11 @@ async def chat_completion_stream_generator(
     yield "data: [DONE]\n\n"
 
 
-async def chat_completion_stream(model_name: str, gen_params: Dict[str, Any]):
-    controller_url = app_settings.controller_address
-    async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(model_name, "generation", client)
-        delimiter = b"\0"
-        async with client.stream(
-            "POST",
-            worker_addr + "/chat_stream",
-            headers=headers,
-            json=gen_params,
-            timeout=WORKER_API_TIMEOUT,
-        ) as response:
-            # content = await response.aread()
-            async for raw_chunk in response.aiter_raw():
-                for chunk in raw_chunk.split(delimiter):
-                    if not chunk:
-                        continue
-                    data = json.loads(chunk.decode())
-                    yield data
-
-
 async def chat_completion(
     model_name: str, gen_params: Dict[str, Any]
-) -> Optional[Dict[str, Any]]:
+) -> Optional[GenerationWorkerResult]:
     ret = None
-    async for content in chat_completion_stream(model_name, gen_params):
+    async for content in generate_completion_stream("/chat_stream", gen_params):
         ret = content
     return ret
 
@@ -443,7 +421,7 @@ async def create_completion(request: CompletionRequest):
         for i, content_task in enumerate(completions):
             content = await content_task
             if content.error_code != ErrorCode.OK:
-                return create_error_response(content.error_code, content.text)
+                return create_error_response(content.error_code, content.message)
             choices.append(
                 CompletionResponseChoice(
                     index=i,
@@ -468,7 +446,7 @@ async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
 
     for i in range(n):
         previous_text = ""
-        async for content in generate_completion_stream(payload):
+        async for content in generate_completion_stream("/completion_stream", payload):
             if content.error_code != ErrorCode.OK:
                 yield f"data: {json.dumps(content.dict(), ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
@@ -498,31 +476,37 @@ async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
     yield "data: [DONE]\n\n"
 
 
-async def generate_completion_stream(payload: Dict[str, Any]) -> GenerationWorkerResult:
+async def generate_completion_stream(url: str, payload: Dict[str, Any]) -> Generator[GenerationWorkerResult, Any, None]:
     controller_address = app_settings.controller_address
     async with httpx.AsyncClient() as client:
         worker_addr = await _get_worker_address(payload["model"], "generation", client)
 
         delimiter = b"\0"
-        async with client.stream(
-            "POST",
-            worker_addr + "/completion_stream",
-            headers=headers,
-            json=payload,
-            timeout=WORKER_API_TIMEOUT,
-        ) as response:
-            # content = await response.aread()
-            async for raw_chunk in response.aiter_raw():
-                for chunk in raw_chunk.split(delimiter):
-                    if not chunk:
-                        continue
-                    data = json.loads(chunk.decode())
-                    yield GenerationWorkerResult.parse_obj(data)
+        try:
+            async with client.stream(
+                "POST",
+                worker_addr + url,
+                headers=headers,
+                json=payload,
+                timeout=WORKER_API_TIMEOUT,
+            ) as response:
+                async for raw_chunk in response.aiter_raw():
+                    for chunk in raw_chunk.split(delimiter):
+                        if not chunk:
+                            continue
+                        data = json.loads(chunk.decode())
+                        yield GenerationWorkerResult.parse_obj(data)
+        except httpx.ReadTimeout:
+            yield BaseWorkerResult(
+                type="error",
+                message="Server is overloading",
+                error_code=ErrorCode.ENGINE_OVERLOADED
+            )
 
 
-async def generate_completion(payload: Dict[str, Any]) -> GenerationWorkerResult:
+async def generate_completion(payload: Dict[str, Any]) -> Optional[GenerationWorkerResult]:
     ret = None
-    async for content in generate_completion_stream(payload):
+    async for content in generate_completion_stream("/completion_stream", payload):
         ret = content
     return ret
 

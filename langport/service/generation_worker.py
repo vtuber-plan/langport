@@ -26,29 +26,10 @@ def create_background_tasks(worker):
     background_tasks.add_task(lambda: worker.release_model_semaphore())
     return background_tasks
 
-
 @app.post("/chat_stream")
 async def api_chat_stream(request: Request):
     params = await request.json()
     await app.worker.acquire_model_semaphore()
-    generator = app.worker.generation_stream(params)
-    background_tasks = create_background_tasks(app.worker)
-    return StreamingResponse(generator, background=background_tasks)
-
-
-@app.post("/chat")
-async def api_chat(request: Request):
-    params = await request.json()
-    await app.worker.acquire_model_semaphore()
-    output = app.worker.generation(params)
-    app.worker.release_model_semaphore()
-    return JSONResponse(output)
-
-
-@app.post("/completion_stream")
-async def api_completion_stream(request: Request):
-    params = await request.json()
-    # await app.worker.acquire_model_semaphore()
     generator = app.worker.generation_bytes_stream(GenerationTask(
         prompt=params["prompt"],
         temperature=params.get("temperature", 1.0),
@@ -60,9 +41,49 @@ async def api_completion_stream(request: Request):
         echo=params.get("echo", False),
         stop_token_ids=params.get("stop_token_ids", None),
     ))
-    # background_tasks = create_background_tasks(app.worker)
-    # return StreamingResponse(generator, background=background_tasks)
-    return StreamingResponse(generator)
+    background_tasks = create_background_tasks(app.worker)
+    return StreamingResponse(generator, background=background_tasks)
+
+@app.post("/chat")
+async def api_chat(request: Request):
+    params = await request.json()
+    await app.worker.acquire_model_semaphore()
+    generator = app.worker.generation_stream(GenerationTask(
+        prompt=params["prompt"],
+        temperature=params.get("temperature", 1.0),
+        repetition_penalty=params.get("repetition_penalty", 0.0),
+        top_p=params.get("top_p", 1.0),
+        top_k=params.get("top_k", 1),
+        max_new_tokens=params.get("max_new_tokens", 512),
+        stop=params.get("stop", None),
+        echo=params.get("echo", False),
+        stop_token_ids=params.get("stop_token_ids", None),
+    ))
+    completion = None
+    for chunk in generator:
+        completion = chunk
+    background_tasks = create_background_tasks(app.worker)
+    return JSONResponse(content=completion.dict(), background=background_tasks)
+
+
+
+@app.post("/completion_stream")
+async def api_completion_stream(request: Request):
+    params = await request.json()
+    await app.worker.acquire_model_semaphore()
+    generator = app.worker.generation_bytes_stream(GenerationTask(
+        prompt=params["prompt"],
+        temperature=params.get("temperature", 1.0),
+        repetition_penalty=params.get("repetition_penalty", 0.0),
+        top_p=params.get("top_p", 1.0),
+        top_k=params.get("top_k", 1),
+        max_new_tokens=params.get("max_new_tokens", 512),
+        stop=params.get("stop", None),
+        echo=params.get("echo", False),
+        stop_token_ids=params.get("stop_token_ids", None),
+    ))
+    background_tasks = create_background_tasks(app.worker)
+    return StreamingResponse(generator, background=background_tasks)
 
 
 @app.post("/completion")
@@ -100,7 +121,7 @@ async def startup_event():
 def shutdown_event():
     app.worker.stop()
 
-
+# We suggest that concurrency == batch * thread
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default="localhost")
@@ -111,7 +132,7 @@ if __name__ == "__main__":
     )
     add_model_args(parser)
     parser.add_argument("--model-name", type=str, help="Optional display name")
-    parser.add_argument("--limit-model-concurrency", type=int, default=5)
+    parser.add_argument("--limit-model-concurrency", type=int, default=4)
     parser.add_argument("--batch", type=int, default=4)
     parser.add_argument("--stream-interval", type=int, default=2)
     parser.add_argument("--no-register", action="store_true")

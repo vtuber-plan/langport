@@ -143,7 +143,8 @@ class BaseModelWorker(object):
     def add_timer(self, name: str, interval: float, fn: Callable[["BaseModelWorker"], None]) -> bool:
         if name in self.timers:
             return False
-        new_timer = IntervalTimer(interval=interval, fn=fn, max_workers=self.limit_model_concurrency, args=(self,))
+        workers = max(1, 2 * self.limit_model_concurrency // self.max_batch_size)
+        new_timer = IntervalTimer(interval=interval, fn=fn, max_workers=workers, args=(self,))
         self.timers[name] = new_timer
         new_timer.start()
         return True
@@ -236,15 +237,24 @@ class BaseModelWorker(object):
     
     def fetch_task_result(self, task_id: str):
         result_queue = self.output_queue[task_id]
+        retry_counter = 0
         while True:
             try:
                 event = result_queue.get(block=False, timeout=None)
             except queue.Empty:
-                time.sleep(0.05)
-                continue
+                time.sleep(0.01)
+                retry_counter += 1
+                if retry_counter > 2000:
+                    break
+                else:
+                    continue
+            retry_counter = 0
             if event.type == "done":
                 break
             elif event.type == "error":
+                yield event
+                break
+            elif event.type == "finish":
                 yield event
                 break
             elif event.type == "data":
