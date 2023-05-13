@@ -74,7 +74,9 @@ async def check_model(request, request_type: str) -> Optional[JSONResponse]:
     ret = None
     async with httpx.AsyncClient() as client:
         try:
-            _worker_addr = await _get_worker_address(request.model, request_type, client)
+            _worker_addr = await _get_worker_address(
+                request.model, request_type, client
+            )
         except:
             models_ret = await client.post(controller_address + "/list_models")
             models = models_ret.json()["models"]
@@ -225,7 +227,9 @@ def get_gen_params(
 
 
 @retry(stop=stop_after_attempt(5))
-async def _get_worker_address(model_name: str, worker_type: str, client: httpx.AsyncClient) -> str:
+async def _get_worker_address(
+    model_name: str, worker_type: str, client: httpx.AsyncClient
+) -> str:
     """
     Get worker address based on the requested model
 
@@ -238,7 +242,9 @@ async def _get_worker_address(model_name: str, worker_type: str, client: httpx.A
 
     ret = await client.post(
         controller_address + "/get_worker_address",
-        json=WorkerAddressRequest(model_name=model_name, worker_type=worker_type).dict(),
+        json=WorkerAddressRequest(
+            model_name=model_name, worker_type=worker_type
+        ).dict(),
     )
     worker_addr = ret.json()["address"]
     # No available worker
@@ -302,7 +308,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
         return create_error_response(ErrorCode.INTERNAL_ERROR, str(e))
     usage = UsageInfo()
     for i, content in enumerate(all_tasks):
-        if content["error_code"] != 0:
+        if content["error_code"] != ErrorCode.OK:
             return create_error_response(content["error_code"], content["text"])
         choices.append(
             ChatCompletionResponseChoice(
@@ -341,7 +347,7 @@ async def chat_completion_stream_generator(
 
         previous_text = ""
         async for content in chat_completion_stream(model_name, gen_params):
-            if content["error_code"] != 0:
+            if content["error_code"] != ErrorCode.OK:
                 yield f"data: {json.dumps(content, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
                 return
@@ -455,7 +461,7 @@ async def create_completion(request: CompletionRequest):
         choices = []
         usage = UsageInfo()
         for i, content in enumerate(all_tasks):
-            if content["error_code"] != 0:
+            if content["error_code"] != ErrorCode.OK:
                 return create_error_response(content["error_code"], content["text"])
             choices.append(
                 CompletionResponseChoice(
@@ -474,35 +480,45 @@ async def create_completion(request: CompletionRequest):
         )
 
 
-async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
+async def generate_completion_single_stream_generator(
+    payload: Dict[str, Any], id: str, i: int, finish_stream_events
+):
     model_name = payload["model"]
+    previous_text = ""
+    async for content in generate_completion_stream(payload):
+        if content["error_code"] != ErrorCode.OK:
+            yield f"data: {json.dumps(content, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+        decoded_unicode = content["text"].replace("\ufffd", "")
+        delta_text = decoded_unicode[len(previous_text) :]
+        previous_text = decoded_unicode
+
+        choice_data = CompletionResponseStreamChoice(
+            index=i,
+            text=delta_text,
+            logprobs=content.get("logprobs", None),
+            finish_reason=content.get("finish_reason", None),
+        )
+        chunk = CompletionStreamResponse(
+            id=id, object="text_completion", choices=[choice_data], model=model_name
+        )
+        if len(delta_text) == 0:
+            if content.get("finish_reason", None) is not None:
+                finish_stream_events.append(chunk)
+            continue
+        yield f"data: {chunk.json(exclude_unset=True, ensure_ascii=False)}\n\n"
+
+
+async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
     id = f"cmpl-{shortuuid.random()}"
     finish_stream_events = []
-    for i in range(n):
-        previous_text = ""
-        async for content in generate_completion_stream(payload):
-            if content["error_code"] != 0:
-                yield f"data: {json.dumps(content, ensure_ascii=False)}\n\n"
-                yield "data: [DONE]\n\n"
-                return
-            decoded_unicode = content["text"].replace("\ufffd", "")
-            delta_text = decoded_unicode[len(previous_text) :]
-            previous_text = decoded_unicode
 
-            choice_data = CompletionResponseStreamChoice(
-                index=i,
-                text=delta_text,
-                logprobs=content.get("logprobs", None),
-                finish_reason=content.get("finish_reason", None),
-            )
-            chunk = CompletionStreamResponse(
-                id=id, object="text_completion", choices=[choice_data], model=model_name
-            )
-            if len(delta_text) == 0:
-                if content.get("finish_reason", None) is not None:
-                    finish_stream_events.append(chunk)
-                continue
-            yield f"data: {chunk.json(exclude_unset=True, ensure_ascii=False)}\n\n"
+    for i in range(n):
+        async for content in generate_completion_single_stream_generator(
+            payload=payload, id=id, i=i, finish_stream_events=finish_stream_events
+        ):
+            yield content
     # There is not "content" field in the last delta message, so exclude_none to exclude field "content".
     for finish_chunk in finish_stream_events:
         yield f"data: {finish_chunk.json(exclude_unset=True, ensure_ascii=False)}\n\n"
@@ -560,10 +576,7 @@ async def create_embeddings(request: EmbeddingsRequest):
     embedding = await get_embedding(payload)
     embedding = json.loads(embedding)
     return EmbeddingsResponse(
-        data=[EmbeddingsData(
-            embedding=embedding["embedding"],
-            index=0
-        )],
+        data=[EmbeddingsData(embedding=embedding["embedding"], index=0)],
         model=request.model,
         usage=UsageInfo(
             prompt_tokens=embedding["usage"]["prompt_tokens"],

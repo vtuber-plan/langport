@@ -72,6 +72,7 @@ def prepare_logits_processor(
     return processor_list
 
 
+@torch.inference_mode()
 def batch_generation(
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizerBase,
@@ -95,20 +96,38 @@ def batch_generation(
         logits_processor_list.append(logits_processor)
 
     # prepare init inputs
-    inputs = tokenizer(
-        prompts, padding="longest", return_tensors="pt", return_length=True
+    inputs = []
+    length = []
+    for i in range(batch_size):
+        each_inputs = tokenizer(prompts[i], return_tensors="pt")
+        each_input_ids = each_inputs.input_ids.squeeze(0)
+        inputs.append(each_input_ids)
+        length.append(len(each_input_ids))
+    
+    # padding to max(length)
+    if tokenizer._pad_token is None:
+        pad_fill_id = tokenizer.eos_token_id
+    else:
+        pad_fill_id = tokenizer.pad_token_id
+    full_input_ids = torch.full(
+        (batch_size, max(length)), pad_fill_id, dtype=torch.long, device=device
     )
-    full_input_ids = inputs.input_ids.to(device)
-    length = inputs.length
-    decoder_input_ids = torch.full(
-        size=(batch_size, 1),
-        fill_value=model.generation_config.decoder_start_token_id,
-        dtype=torch.long,
-        device=device,
-    )
+    for i in range(batch_size):
+        full_input_ids[i, :length[i]] = inputs[i]
 
+    # needed variables
     input_ids = full_input_ids[:, : min(length)]
-    encoder_outputs = model.encoder(input_ids=full_input_ids)
+    if model.config.is_encoder_decoder:
+        encoder_outputs = model.encoder(input_ids=full_input_ids)
+        decoder_input_ids = torch.full(
+            (batch_size, 1),
+            model.generation_config.decoder_start_token_id,
+            dtype=torch.long,
+            device=device,
+        )
+    else:
+        encoder_outputs = None
+        decoder_input_ids = input_ids
     past_key_values = None
 
     # decode state
@@ -128,7 +147,7 @@ def batch_generation(
             past_key_values = out.past_key_values
         else:
             out = model(
-                input_ids=input_ids,
+                input_ids=decoder_input_ids,
                 use_cache=True,
                 past_key_values=past_key_values,
             )
@@ -138,6 +157,8 @@ def batch_generation(
         new_ids = []
         current_len = input_ids.shape[1]
         for i in range(batch_size):
+            if is_stop[i]:
+                continue
             task = tasks[i]
             last_token_logits = logits[i][-1]
 
@@ -168,13 +189,37 @@ def batch_generation(
             else:
                 new_ids.append(token)
 
-            if token == tokenizer.eos_token_id:
+            if token == tokenizer.eos_token_id or step == max_new_tokens - 1:
                 is_stop[i] = True
             else:
                 is_stop[i] = False
 
-            if step % stream_interval == 0 or step == max_new_tokens - 1 or is_stop[i]:
-                output = tokenizer.decode(new_ids, skip_special_tokens=True)
+        if batch_size == 1:
+            new_ids_tensor = torch.tensor(
+                new_ids, dtype=torch.long, device=input_ids.device
+            ).unsqueeze(0)
+        else:
+            new_ids_tensor = torch.tensor(
+                new_ids, dtype=torch.long, device=input_ids.device
+            )
+        input_ids = torch.cat(
+            (input_ids, new_ids_tensor),
+            dim=1,
+        )
+        decoder_input_ids = new_ids_tensor
+
+        for i in range(batch_size):
+            if step % stream_interval == 0 or is_stop[i]:
+                if tasks[i].echo:
+                    tmp_output_ids = input_ids[i, :]
+                    rfind_start = length[i]
+                else:
+                    tmp_output_ids = input_ids[i, length[i]:]
+                    rfind_start = 0
+                output = tokenizer.decode(input_ids[i, :], skip_special_tokens=True)
+
+                # stop by stopwords
+                
                 yield GenerationWorkerResult(
                     task_id=task.task_id,
                     type="data",
@@ -184,15 +229,29 @@ def batch_generation(
                         total_tokens=length[i] + step,
                         completion_tokens=step,
                     ),
+                    finish_reason=None
                 )
 
             if is_stop[i]:
+                if step == max_new_tokens - 1:
+                    finish_reason = "length"
+                else:
+                    finish_reason = "stop"
+                yield GenerationWorkerResult(
+                    task_id=task.task_id,
+                    type="data",
+                    text=output,
+                    usage=UsageInfo(
+                        prompt_tokens=length[i],
+                        total_tokens=length[i] + step,
+                        completion_tokens=step,
+                    ),
+                    finish_reason=finish_reason
+                )
                 yield BaseWorkerResult(task_id=task.task_id, type="done")
 
-        input_ids = torch.cat(
-            (input_ids, torch.tensor(new_ids, dtype=torch.long, device=input_ids.device)),
-            dim=1,
-        )
+        if all(is_stop):
+            break
 
     del past_key_values
 
@@ -204,7 +263,6 @@ def inference_generation(worker: "GenerationModelWorker"):
     batch_size = len(tasks)
     if batch_size == 0:
         return
-
     for chunk in batch_generation(
         worker.model_holder.model,
         worker.model_holder.tokenizer,
@@ -213,6 +271,7 @@ def inference_generation(worker: "GenerationModelWorker"):
         tasks,
     ):
         worker.push_task_result(chunk.task_id, chunk)
+
 
 
 class GenerationModelWorker(BaseModelWorker):
@@ -252,8 +311,12 @@ class GenerationModelWorker(BaseModelWorker):
             logger=logger,
         )
         self.add_timer("generation_inference", 0.5, inference_generation)
-
-    async def generation_stream(self, task: GenerationTask):
+    
+    def generation_stream(self, task: GenerationTask):
         self.add_task(task)
-        async for chunk in self.fetch_task_result(task.task_id):
+        for chunk in self.fetch_task_result(task.task_id):
             yield chunk
+
+    def generation_bytes_stream(self, task: GenerationTask):
+        for chunk in self.generation_stream(task):
+            yield json.dumps(chunk.dict()).encode() + b"\0"

@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+from collections import defaultdict
 import dataclasses
 import logging
 import json
@@ -7,6 +8,7 @@ import os
 import time
 from typing import Any, Callable, Dict, List, Optional, Union
 import threading
+import queue
 import uuid
 
 from fastapi import FastAPI, Request, BackgroundTasks
@@ -103,8 +105,8 @@ class BaseModelWorker(object):
 
         self.context_len = self.model_holder.context_len
 
-        self.task_queue: List[BaseWorkerTask] = []
-        self.task_output: Dict[str, List[BaseWorkerResult]] = {}
+        self.task_queue: queue.Queue[BaseWorkerTask] = queue.Queue()
+        self.output_queue: Dict[str, queue.Queue[BaseWorkerResult]] = defaultdict(queue.Queue)
 
         self.timers: Dict[str, IntervalTimer] = {}
 
@@ -229,33 +231,34 @@ class BaseModelWorker(object):
         )
     
     def add_task(self, task: BaseWorkerTask):
-        self.task_queue.append(task)
-        self.task_output[task.task_id] = []
+        self.task_queue.put(task, block=True, timeout=WORKER_API_TIMEOUT)
+        self.output_queue[task.task_id] = queue.Queue()
     
-    async def fetch_task_result(self, task_id: str):
-        out_queue = self.task_output[task_id]
+    def fetch_task_result(self, task_id: str):
+        result_queue = self.output_queue[task_id]
         while True:
-            if len(out_queue) <= 0:
-                await asyncio.sleep(0.1)
+            if result_queue.empty():
+                time.sleep(0.05)
                 continue
-            event = out_queue.pop(0)
+            event = result_queue.get(block=True, timeout=WORKER_API_TIMEOUT)
             if event.type == "done":
                 break
             elif event.type == "error":
                 yield event
                 break
-            else:
+            elif event.type == "data":
                 yield event
-            await asyncio.sleep(0.1)
+            else:
+                raise ValueError("Bad chunk type.")
         
-        del self.task_output[task_id]
+        del self.output_queue[task_id]
     
     def fetch_tasks(self) -> List[BaseWorkerResult]:
         task_batch = []
-        while len(task_batch) <= self.max_batch_size and len(self.task_queue) > 0:
-            task = self.task_queue.pop(0)
+        while len(task_batch) <= self.max_batch_size and not self.task_queue.empty():
+            task = self.task_queue.get(block=True, timeout=WORKER_API_TIMEOUT)
             task_batch.append(task)
         return task_batch
     
     def push_task_result(self, task_id: str, response: BaseWorkerResult):
-        self.task_output[task_id].append(response)
+        self.output_queue[task_id].put(response, block=True, timeout=WORKER_API_TIMEOUT)

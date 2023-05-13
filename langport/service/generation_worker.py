@@ -49,7 +49,7 @@ async def api_chat(request: Request):
 async def api_completion_stream(request: Request):
     params = await request.json()
     await app.worker.acquire_model_semaphore()
-    generator = app.worker.generation_stream(GenerationTask(
+    generator = app.worker.generation_bytes_stream(GenerationTask(
         prompt=params["prompt"],
         temperature=params.get("temperature", 1.0),
         repetition_penalty=params.get("repetition_penalty", 0.0),
@@ -68,9 +68,22 @@ async def api_completion_stream(request: Request):
 async def api_completion(request: Request):
     params = await request.json()
     await app.worker.acquire_model_semaphore()
-    completion = app.worker.generation(params)
+    generator = app.worker.generation_stream(GenerationTask(
+        prompt=params["prompt"],
+        temperature=params.get("temperature", 1.0),
+        repetition_penalty=params.get("repetition_penalty", 0.0),
+        top_p=params.get("top_p", 1.0),
+        top_k=params.get("top_k", 1),
+        max_new_tokens=params.get("max_new_tokens", 512),
+        stop=params.get("stop", None),
+        echo=params.get("echo", False),
+        stop_token_ids=params.get("stop_token_ids", None),
+    ))
+    completion = None
+    for chunk in generator:
+        completion = chunk
     background_tasks = create_background_tasks(app.worker)
-    return JSONResponse(content=completion, background=background_tasks)
+    return JSONResponse(content=completion.dict(), background=background_tasks)
 
 @app.get("/get_worker_status")
 async def api_get_status(request: Request):
