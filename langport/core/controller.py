@@ -133,13 +133,12 @@ class Controller(BaseWorker):
 
         return WorkerStatus.parse_obj(r.json())
 
-    def refresh_all_workers(self):
-        pass
-
     def list_models(self):
         model_names = set()
 
         for w_id, w_info in self.worker_info.items():
+            if w_info.status is None:
+                w_info.status = self.request_single_worker_status(w_info.worker_addr)
             model_names.add(w_info.status.model_name)
 
         return list(model_names)
@@ -168,7 +167,10 @@ class Controller(BaseWorker):
             worker_ids = []
             worker_qlen = []
             for w_id, w_info in self.worker_info.items():
-                if model_name == w_info.status.model_name:
+                if (
+                    model_name == w_info.status.model_name
+                    and worker_type == w_info.worker_type
+                ):
                     worker_ids.append(w_id)
                     worker_qlen.append(w_info.status.queue_length / w_info.status.speed)
             if len(worker_ids) == 0:
@@ -204,52 +206,20 @@ class Controller(BaseWorker):
         for worker_id in to_delete:
             self.remove_worker(RemoveWorkerRequest(worker_id=worker_id))
 
+    def request_single_worker_status(self, worker_addr: str):
+        url = worker_addr + "/get_worker_status"
+
+        ret = requests.post(
+            url,
+            json={},
+            timeout=WORKER_API_TIMEOUT,
+        )
+        status = WorkerStatus.parse_obj(ret.json())
+        return status
+
+
     def request_worker_status(self):
         self.logger.info(f"Update workers status.")
         for worker_id, worker_info in self.worker_info.items():
-            url = worker_info.worker_addr + "/get_worker_status"
-
-            ret = requests.post(
-                url,
-                json={},
-                timeout=WORKER_API_TIMEOUT,
-            )
-            status = WorkerStatus.parse_obj(ret.json())
-            worker_info.status = status
+            worker_info.status = self.request_single_worker_status(worker_info.worker_addr)
             worker_info.update_time = time.time()
-
-    def handle_no_worker(self, params, server_error_msg):
-        self.logger.info(f"no worker: {params['model']}")
-        ret = {
-            "text": server_error_msg,
-            "error_code": 2,
-        }
-        return json.dumps(ret).encode() + b"\0"
-
-    def handle_worker_timeout(self, worker_address, server_error_msg):
-        self.logger.info(f"worker timeout: {worker_address}")
-        ret = {
-            "text": server_error_msg,
-            "error_code": 3,
-        }
-        return json.dumps(ret).encode() + b"\0"
-
-    # Let the controller act as a worker to achieve hierarchical
-    # management. This can be used to connect isolated sub networks.
-    def api_get_worker_status(self) -> WorkerStatus:
-        model_names = set()
-        speed = 0
-        queue_length = 0
-
-        for w_name in self.worker_info:
-            worker_status = self.get_worker_status(w_name)
-            if worker_status is not None:
-                model_names.update(worker_status["model_names"])
-                speed += worker_status["speed"]
-                queue_length += worker_status["queue_length"]
-
-        return {
-            "model_names": list(model_names),
-            "speed": speed,
-            "queue_length": queue_length,
-        }

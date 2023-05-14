@@ -46,17 +46,13 @@ from transformers.generation.logits_process import (
     TopKLogitsWarper,
 )
 from langport.constants import (
+    GENERATION_INFERENCE_INTERVAL,
     WORKER_API_TIMEOUT,
     WORKER_HEART_BEAT_INTERVAL,
-    WORKER_INFERENCE_TIMER_INTERVAL,
     ErrorCode,
 )
 from langport.model.model_adapter import load_model
 from langport.utils import server_error_msg, pretty_print_semaphore
-
-
-GENERATION_INFERENCE_INTERVAL = 0.05
-GENERATION_MAX_DELAY = 0.3
 
 
 def prepare_logits_processor(
@@ -277,23 +273,14 @@ def batch_generation(
     del past_key_values
 
 
-def inference_generation(worker: "GenerationModelWorker"):
+def inference_generation(worker: "ModelWorker"):
     if not worker.online:
         return
 
-    now_time = time.time()
-    dyna_time = (
-        -GENERATION_MAX_DELAY * worker.task_queue.qsize() / worker.max_batch
-        + GENERATION_MAX_DELAY
-    )
-    if now_time - worker._last_inference_time < dyna_time:
-        return
     tasks = worker.fetch_tasks()
     batch_size = len(tasks)
     if batch_size == 0:
         return
-
-    worker._last_inference_time = now_time
 
     for chunk in batch_generation(
         worker.model_holder.model,
@@ -355,7 +342,6 @@ class GenerationModelWorker(ModelWorker):
             kwargs=None,
             workers=workers,
         )
-        self._last_inference_time = time.time()
 
     def generation_stream(self, task: GenerationTask):
         self.add_task(task)

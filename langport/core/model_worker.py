@@ -29,7 +29,6 @@ from langport.protocol.worker_protocol import (
 from langport.constants import (
     WORKER_API_TIMEOUT,
     WORKER_HEART_BEAT_INTERVAL,
-    WORKER_INFERENCE_TIMER_INTERVAL,
     ErrorCode,
 )
 from langport.model.model_adapter import load_model

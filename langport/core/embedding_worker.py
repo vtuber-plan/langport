@@ -13,7 +13,6 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 import requests
 from tenacity import retry, stop_after_attempt
-from langport.core.base_worker import BaseModelWorker
 from langport.core.model_worker import ModelWorker
 
 from langport.protocol.worker_protocol import (
@@ -23,7 +22,6 @@ from langport.protocol.worker_protocol import (
     RegisterWorkerRequest,
     RemoveWorkerRequest,
     UsageInfo,
-    WorkerHeartbeat,
     WorkerStatus,
 )
 
@@ -32,15 +30,14 @@ import torch
 from langport.constants import (
     WORKER_API_TIMEOUT,
     WORKER_HEART_BEAT_INTERVAL,
-    WORKER_HEART_BEAT_CHECK_INTERVAL,
-    WORKER_INFERENCE_TIMER_INTERVAL,
+    EMBEDDING_INFERENCE_INTERVAL,
     ErrorCode,
 )
 from langport.model.model_adapter import load_model
 from langport.utils import server_error_msg, pretty_print_semaphore
 
 
-def inference_embeddings(worker: "EmbeddingModelWorker"):
+def inference_embeddings(worker: "ModelWorker"):
     if not worker.online:
         return
     tasks = worker.fetch_tasks()
@@ -139,11 +136,19 @@ class EmbeddingModelWorker(ModelWorker):
             stream_interval=stream_interval,
             logger=logger,
         )
-        self.add_timer("embeddings_inference", 0.5, inference_embeddings)
+        workers = max(1, 2 * self.limit_model_concurrency // self.max_batch)
+        self.add_timer(
+            "embeddings_inference", 
+            EMBEDDING_INFERENCE_INTERVAL, 
+            inference_embeddings, 
+            args=(self,), 
+            kwargs=None, 
+            workers=workers
+        )
 
-    async def get_embeddings(self, task: EmbeddingsTask):
+    def get_embeddings(self, task: EmbeddingsTask):
         self.add_task(task)
         result = None
-        async for chunk in self.fetch_task_result(task.task_id):
+        for chunk in self.fetch_task_result(task.task_id):
             result = chunk
         return result

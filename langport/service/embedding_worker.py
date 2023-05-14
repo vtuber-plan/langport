@@ -28,12 +28,12 @@ def create_background_tasks(worker):
 @app.post("/embeddings")
 async def api_embeddings(request: EmbeddingsTask):
     await app.worker.acquire_model_semaphore()
-    embedding = await app.worker.get_embeddings(request)
+    embedding = app.worker.get_embeddings(request)
     background_tasks = create_background_tasks(app.worker)
-    return JSONResponse(content=embedding.json(), background=background_tasks)
+    return JSONResponse(content=embedding.dict(), background=background_tasks)
 
 
-@app.get("/get_worker_status")
+@app.post("/get_worker_status")
 async def api_get_status(request: Request):
     return app.worker.get_status()
 

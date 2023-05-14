@@ -37,12 +37,6 @@ async def remove_worker(request: RemoveWorkerRequest):
     app.controller.remove_worker(request)
 
 
-@app.post("/refresh_all_workers")
-async def refresh_all_workers():
-    print(app)
-    app.controller.refresh_all_workers()
-
-
 @app.post("/list_models")
 async def list_models():
     models = app.controller.list_models()

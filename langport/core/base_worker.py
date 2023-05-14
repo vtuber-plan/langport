@@ -26,7 +26,6 @@ from langport.protocol.worker_protocol import (
 from langport.constants import (
     WORKER_API_TIMEOUT,
     WORKER_HEART_BEAT_INTERVAL,
-    WORKER_INFERENCE_TIMER_INTERVAL,
     ErrorCode,
 )
 from langport.utils.interval_timer import IntervalTimer
@@ -163,7 +162,6 @@ class BaseWorker(object):
             timer.cancel()
         self.timers.clear()
 
-    @retry(stop=stop_after_attempt(3))
     def send_heart_beat(self):
         self.logger.info(
             f"Send heart beat. Worker: {self.worker_id}; Address: {self.worker_addr}."
@@ -171,13 +169,21 @@ class BaseWorker(object):
 
         url = self.controller_addr + "/receive_heart_beat"
 
-        ret = requests.post(
-            url,
-            json=WorkerHeartbeatPing(
-                worker_id=self.worker_id,
-            ).dict(),
-            timeout=WORKER_API_TIMEOUT,
-        )
+        try:
+            ret = requests.post(
+                url,
+                json=WorkerHeartbeatPing(
+                    worker_id=self.worker_id,
+                ).dict(),
+                timeout=WORKER_API_TIMEOUT,
+            )
+        except requests.exceptions.ReadTimeout:
+            self.logger.info(
+                f"Failed to send heart beat . Worker: {self.worker_id}; Address: {self.worker_addr}."
+            )
+            self.register_to_controller()
+            return
+            
         exist = WorkerHeartbeatPong.parse_obj(ret.json()).exist
 
         if not exist:
