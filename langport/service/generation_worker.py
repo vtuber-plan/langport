@@ -107,8 +107,8 @@ async def api_completion(request: Request):
     background_tasks = create_background_tasks(app.worker)
     return JSONResponse(content=completion.dict(), background=background_tasks)
 
-@app.get("/get_worker_status")
-async def api_get_status(request: Request):
+@app.post("/get_worker_status")
+async def get_worker_status(request: Request):
     return app.worker.get_status()
 
 
@@ -154,6 +154,9 @@ if __name__ == "__main__":
 
     if args.worker_address is None:
         args.worker_address = f"http://{args.host}:{args.port}"
+    
+    if args.model_name is None:
+        args.model_name = os.path.basename(os.path.normpath(args.model_path))
 
     app.worker = GenerationModelWorker(
         controller_addr=args.controller_address,

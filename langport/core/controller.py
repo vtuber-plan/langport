@@ -5,6 +5,7 @@ from enum import Enum, auto
 import json
 import logging
 import time
+import traceback
 from typing import Any, Callable, Dict, List, Optional, Union
 import threading
 
@@ -16,6 +17,8 @@ import uvicorn
 
 from langport.constants import (
     CONTROLLER_HEART_BEAT_EXPIRATION,
+    CONTROLLER_STATUS_FRESH_INTERVAL,
+    WORKER_API_TIMEOUT,
 )
 from langport.core.base_worker import BaseWorker
 from langport.protocol.worker_protocol import (
@@ -65,7 +68,7 @@ class Controller(BaseWorker):
             worker_type="controller",
             logger=logger,
         )
-        self.worker_info: Dict[str:WorkerInfo] = {}
+        self.worker_info: Dict[str, WorkerInfo] = {}
         self.dispatch_method = DispatchMethod.from_str(dispatch_method)
 
         self.logger = logger
@@ -76,6 +79,13 @@ class Controller(BaseWorker):
             "remove_stable_workers",
             CONTROLLER_HEART_BEAT_EXPIRATION,
             self.remove_stable_workers_by_expiration,
+            workers=1,
+        )
+
+        self.add_timer(
+            "request_worker_status",
+            CONTROLLER_STATUS_FRESH_INTERVAL,
+            self.request_worker_status,
             workers=1,
         )
 
@@ -193,6 +203,20 @@ class Controller(BaseWorker):
 
         for worker_id in to_delete:
             self.remove_worker(RemoveWorkerRequest(worker_id=worker_id))
+
+    def request_worker_status(self):
+        self.logger.info(f"Update workers status.")
+        for worker_id, worker_info in self.worker_info.items():
+            url = worker_info.worker_addr + "/get_worker_status"
+
+            ret = requests.post(
+                url,
+                json={},
+                timeout=WORKER_API_TIMEOUT,
+            )
+            status = WorkerStatus.parse_obj(ret.json())
+            worker_info.status = status
+            worker_info.update_time = time.time()
 
     def handle_no_worker(self, params, server_error_msg):
         self.logger.info(f"no worker: {params['model']}")

@@ -54,11 +54,11 @@ def inference_embeddings(worker: "EmbeddingModelWorker"):
         model = worker.model_holder.model
         input_ids = tokenizer.encode(prompts, return_tensors="pt").to(worker.device)
         model_output = model(input_ids, output_hidden_states=True)
-        # is_chatglm = "chatglm" in str(type(model)).lower()
-        # if is_chatglm:
-        #     data = model_output.hidden_states[-1].transpose(0, 1)
-        # else:
-        data = model_output.hidden_states[-1]
+        is_chatglm = "chatglm" in str(type(model)).lower()
+        if is_chatglm:
+            data = model_output.hidden_states[-1].transpose(0, 1)
+        else:
+            data = model_output.hidden_states[-1]
         embeddings = torch.mean(data, dim=1)
         for i in range(batch_size):
             token_num = len(tokenizer(prompts[i]).input_ids)

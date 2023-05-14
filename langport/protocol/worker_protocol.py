@@ -9,6 +9,7 @@ from langport.constants import ErrorCode
 
 
 class WorkerStatus(BaseModel):
+    worker_id: str
     model_name: str
     speed: int = 1
     queue_length: int

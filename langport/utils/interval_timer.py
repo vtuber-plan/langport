@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
+import traceback
 from typing import Any, Iterable, Mapping, Optional
 
 class IntervalTimer(object):
@@ -26,12 +27,18 @@ class IntervalTimer(object):
         self.is_activated = False
         self._timer.join()
     
+    def function_wrapper(self, args: Optional[Iterable[Any]]=None, kwargs: Optional[Mapping[str, Any]]=None):
+        try:
+            self.fn(*args, **kwargs)
+        except:
+            traceback.print_exc()
+    
     def run(self):
         while True:
             if self.is_activated:
                 start_time = time.time()
                 if start_time - self.last_time > self.interval:
-                    self._executor.submit(self.fn, *self.args, **self.kwargs)
+                    self._executor.submit(self.function_wrapper, self.args, self.kwargs)
                     finish_time = time.time()
                     self.last_time = finish_time
                     if finish_time - start_time > self.interval:

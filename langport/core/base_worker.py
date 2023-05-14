@@ -117,8 +117,18 @@ class BaseWorker(object):
             worker_type=self.worker_type,
             check_heart_beat=True,
         )
-        r = requests.post(url, json=data.dict(), timeout=WORKER_API_TIMEOUT)
-        assert r.status_code == 200
+        try:
+            r = requests.post(url, json=data.dict(), timeout=WORKER_API_TIMEOUT)
+        except requests.exceptions.ReadTimeout:
+            self.logger.error(
+                "Register worker to controller failed for timeout response."
+            )
+            return
+
+        if r.status_code != 200:
+            self.logger.error(
+                "Register worker to controller failed for incorrect response."
+            )
 
     def remove_from_controller(self):
         self.logger.info("Remove from controller")
@@ -131,6 +141,7 @@ class BaseWorker(object):
             self.logger.error(
                 "Remove worker from controller failed for timeout response."
             )
+            return
 
         if r.status_code != 200:
             self.logger.error(

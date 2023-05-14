@@ -1,5 +1,6 @@
 # langport
 LangPort is a open-source large language model serving platform.
+Our goal is to build a super fast LLM inference service. Currently, we can  infer a 7B LLaMA model on a single 3090 with a speed of 12 QPS.
 It is inspired by project [lmsys/fastchat](https://github.com/lm-sys/FastChat), we hope that the serving platform is lightweight and fast, but fastchat includes other features such as training and evaluation make it complicate.
 
 The core features include:
@@ -44,6 +45,7 @@ python -m langport.service.generation_worker --model-path <your model path>
 python -m langport.service.openai_api
 ```
 
+If you need the embeddings API or other features:
 ``` bash
 python -m langport.service.controller
 python -m langport.service.generation_worker --model-path <your model path>
