@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 import requests
 from tenacity import retry, stop_after_attempt
 from langport.core.base_worker import BaseModelWorker
+from langport.core.model_worker import ModelWorker
 
 from langport.protocol.worker_protocol import (
     BaseWorkerResult,
@@ -102,7 +103,7 @@ def inference_embeddings(worker: "EmbeddingModelWorker"):
         )
 
 
-class EmbeddingModelWorker(BaseModelWorker):
+class EmbeddingModelWorker(ModelWorker):
     def __init__(
         self,
         controller_addr: str,

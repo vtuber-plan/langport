@@ -5,7 +5,7 @@ import logging
 import json
 import os
 import time
-from typing import List, Optional, Union
+from typing import Iterable, List, Optional, Union
 import threading
 import uuid
 import traceback
@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 import requests
 from tenacity import retry, stop_after_attempt
-from langport.core.base_worker import BaseModelWorker
+from langport.core.model_worker import ModelWorker
 
 from langport.protocol.worker_protocol import (
     BaseWorkerResult,
@@ -25,7 +25,6 @@ from langport.protocol.worker_protocol import (
     RegisterWorkerRequest,
     RemoveWorkerRequest,
     UsageInfo,
-    WorkerHeartbeat,
     WorkerStatus,
 )
 
@@ -49,7 +48,6 @@ from transformers.generation.logits_process import (
 from langport.constants import (
     WORKER_API_TIMEOUT,
     WORKER_HEART_BEAT_INTERVAL,
-    WORKER_HEART_BEAT_CHECK_INTERVAL,
     WORKER_INFERENCE_TIMER_INTERVAL,
     ErrorCode,
 )
@@ -58,7 +56,7 @@ from langport.utils import server_error_msg, pretty_print_semaphore
 
 
 GENERATION_INFERENCE_INTERVAL = 0.05
-GENERATION_MAX_DELAY = 1
+GENERATION_MAX_DELAY = 0.3
 
 
 def prepare_logits_processor(
@@ -75,6 +73,24 @@ def prepare_logits_processor(
     if top_k > 0:
         processor_list.append(TopKLogitsWarper(top_k))
     return processor_list
+
+
+def stop_by_stopwords(
+    output: str, rfind_start: int, stop: Optional[Union[str, List[str]]]
+) -> int:
+    if stop is not None:
+        if isinstance(stop, str):
+            pos = output.rfind(stop, rfind_start)
+            if pos != -1:
+                return pos
+        elif isinstance(stop, Iterable):
+            for each_stop in stop:
+                pos = output.rfind(each_stop, rfind_start)
+                if pos != -1:
+                    return pos
+        else:
+            raise ValueError("Invalid stop field type.")
+    return -1
 
 
 @torch.inference_mode()
@@ -192,10 +208,11 @@ def batch_generation(
             else:
                 new_ids.append(token)
 
+            if task.stop_token_ids is not None and token in task.stop_token_ids:
+                is_stop[i] = True
+
             if token == tokenizer.eos_token_id or step == max_new_tokens - 1:
                 is_stop[i] = True
-            else:
-                is_stop[i] = False
 
         new_ids_tensor = torch.tensor(
             new_ids, dtype=torch.long, device=input_ids.device
@@ -212,12 +229,19 @@ def batch_generation(
             if step % stream_interval == 0 or is_stop[i]:
                 if tasks[i].echo:
                     tmp_output_ids = input_ids[i, :]
+                    rfind_start = length[i]
                 else:
                     tmp_output_ids = input_ids[i, length[i] :]
+                    rfind_start = 0
                 output = tokenizer.decode(tmp_output_ids, skip_special_tokens=True)
 
                 # stop by stopwords
+                stop_pos = stop_by_stopwords(output, rfind_start, task.stop)
+                if stop_pos != -1:
+                    is_stop[i] = True
+                    output = output[:stop_pos]
 
+                # yield result
                 yield GenerationWorkerResult(
                     task_id=task.task_id,
                     type="data",
@@ -259,7 +283,7 @@ def inference_generation(worker: "GenerationModelWorker"):
 
     now_time = time.time()
     dyna_time = (
-        -GENERATION_MAX_DELAY * worker.task_queue.qsize() / worker.max_batch_size
+        -GENERATION_MAX_DELAY * worker.task_queue.qsize() / worker.max_batch
         + GENERATION_MAX_DELAY
     )
     if now_time - worker._last_inference_time < dyna_time:
@@ -286,7 +310,7 @@ def inference_generation(worker: "GenerationModelWorker"):
         )
 
 
-class GenerationModelWorker(BaseModelWorker):
+class GenerationModelWorker(ModelWorker):
     def __init__(
         self,
         controller_addr: str,
@@ -322,8 +346,14 @@ class GenerationModelWorker(BaseModelWorker):
             stream_interval=stream_interval,
             logger=logger,
         )
+        workers = max(1, 2 * self.limit_model_concurrency // self.max_batch)
         self.add_timer(
-            "generation_inference", GENERATION_INFERENCE_INTERVAL, inference_generation
+            "generation_inference",
+            GENERATION_INFERENCE_INTERVAL,
+            inference_generation,
+            args=[self],
+            kwargs=None,
+            workers=workers,
         )
         self._last_inference_time = time.time()
 

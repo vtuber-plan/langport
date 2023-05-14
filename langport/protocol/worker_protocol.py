@@ -13,16 +13,17 @@ class WorkerStatus(BaseModel):
     speed: int = 1
     queue_length: int
 
-class WorkerHeartbeat(BaseModel):
+class WorkerHeartbeatPing(BaseModel):
     worker_id: str
-    status: WorkerStatus
+
+class WorkerHeartbeatPong(BaseModel):
+    exist: bool
 
 class RegisterWorkerRequest(BaseModel):
     worker_id: str
     worker_addr: str
     worker_type: str
     check_heart_beat: bool
-    worker_status: Optional[WorkerStatus]
 
 class RemoveWorkerRequest(BaseModel):
     worker_id: str

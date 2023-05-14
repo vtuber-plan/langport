@@ -14,8 +14,17 @@ import numpy as np
 import requests
 import uvicorn
 
-from langport.constants import CONTROLLER_HEART_BEAT_EXPIRATION, CONTROLLER_HEART_BEAT_CHECK_INTERVAL
-from langport.protocol.worker_protocol import RemoveWorkerRequest, RegisterWorkerRequest, WorkerHeartbeat, WorkerStatus
+from langport.constants import (
+    CONTROLLER_HEART_BEAT_EXPIRATION,
+)
+from langport.core.base_worker import BaseWorker
+from langport.protocol.worker_protocol import (
+    RemoveWorkerRequest,
+    RegisterWorkerRequest,
+    WorkerHeartbeatPing,
+    WorkerHeartbeatPong,
+    WorkerStatus,
+)
 from langport.utils import server_error_msg
 
 
@@ -41,38 +50,34 @@ class WorkerInfo:
     status: Optional[WorkerStatus]
     update_time: int
 
-def heart_beat_controller(controller: "Controller"):
-    last_time = time.time()
-    while controller.online:
-        time.sleep(CONTROLLER_HEART_BEAT_CHECK_INTERVAL)
-        now_time = time.time()
-        if now_time - last_time > CONTROLLER_HEART_BEAT_EXPIRATION:
-            controller.remove_stable_workers_by_expiration()
-            last_time = now_time
-
-class Controller(object):
-    def __init__(self, dispatch_method: str, logger):
-        self.worker_info: Dict[str: WorkerInfo] = {}
+class Controller(BaseWorker):
+    def __init__(
+        self,
+        controller_addr: str,
+        controller_id: str,
+        dispatch_method: str,
+        logger: logging.Logger,
+    ):
+        super(Controller, self).__init__(
+            controller_addr=None,
+            worker_addr=controller_addr,
+            worker_id=controller_id,
+            worker_type="controller",
+            logger=logger,
+        )
+        self.worker_info: Dict[str:WorkerInfo] = {}
         self.dispatch_method = DispatchMethod.from_str(dispatch_method)
-        
+
         self.logger = logger
         self.logger.info("Init controller")
 
-        self.online = False
-    
-    def start(self):
-        if self.online:
-            return
-        self.heart_beat_thread = threading.Thread(
-            target=heart_beat_controller, args=(self,)
+        # startup
+        self.add_timer(
+            "remove_stable_workers",
+            CONTROLLER_HEART_BEAT_EXPIRATION,
+            self.remove_stable_workers_by_expiration,
+            workers=1,
         )
-        self.heart_beat_thread.start()
-        self.online = True
-
-    def stop(self):
-        if not self.online:
-            return
-        self.online = False
 
     def register_worker(self, request: RegisterWorkerRequest) -> bool:
         worker_id = request.worker_id
@@ -87,8 +92,8 @@ class Controller(object):
             worker_id=request.worker_id,
             worker_type=request.worker_type,
             worker_addr=request.worker_addr,
-            status=request.worker_status,
-            update_time=time.time()
+            status=None,
+            update_time=time.time(),
         )
 
         self.logger.info(f"Register done: {worker_id}")
@@ -134,7 +139,10 @@ class Controller(object):
             worker_names = []
             worker_speeds = []
             for w_name, w_info in self.worker_info.items():
-                if model_name == w_info.status.model_name and worker_type == w_info.worker_type:
+                if (
+                    model_name == w_info.status.model_name
+                    and worker_type == w_info.worker_type
+                ):
                     worker_names.append(w_name)
                     worker_speeds.append(w_info.status.speed)
             worker_speeds = np.array(worker_speeds, dtype=np.float32)
@@ -165,15 +173,13 @@ class Controller(object):
         else:
             raise ValueError(f"Invalid dispatch method: {self.dispatch_method}")
 
-    def receive_heart_beat(self, heartbeat: WorkerHeartbeat):
+    def receive_heart_beat(self, heartbeat: WorkerHeartbeatPing):
         worker_id = heartbeat.worker_id
 
         if worker_id not in self.worker_info:
             self.logger.info(f"Receive unknown heart beat. {worker_id}")
             return False
 
-        self.worker_info[worker_id].status = heartbeat.status
-        self.worker_info[worker_id].update_time = time.time()
         self.logger.info(f"Receive heart beat. {worker_id}")
         return True
 
@@ -206,7 +212,7 @@ class Controller(object):
 
     # Let the controller act as a worker to achieve hierarchical
     # management. This can be used to connect isolated sub networks.
-    def api_get_worker_status(self):
+    def api_get_worker_status(self) -> WorkerStatus:
         model_names = set()
         speed = 0
         queue_length = 0
@@ -223,4 +229,3 @@ class Controller(object):
             "speed": speed,
             "queue_length": queue_length,
         }
-

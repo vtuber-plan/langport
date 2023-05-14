@@ -18,7 +18,7 @@ The core features include:
 ### Method 1: With pip
 
 ```bash
-pip3 install langport
+pip3 install git+https://github.com/vtuber-plan/langport.git 
 ```
 
 ### Method 2: From source
@@ -37,10 +37,17 @@ pip install -e .
 
 ## Start the server
 
+It is simple to start a local chat API service:
 ``` bash
 python -m langport.service.controller
-python -m langport.service.embedding_worker
-python -m langport.service.generation_worker
+python -m langport.service.generation_worker --model-path <your model path>
+python -m langport.service.openai_api
+```
+
+``` bash
+python -m langport.service.controller
+python -m langport.service.generation_worker --model-path <your model path>
+python -m langport.service.embedding_worker --model-path <your model path>
 python -m langport.service.openai_api
 python -m langport.service.fauxpilot_api
 ```

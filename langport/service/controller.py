@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 from typing import List, Union
+import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
@@ -15,7 +16,8 @@ from langport.protocol.worker_protocol import (
     RemoveWorkerRequest,
     WorkerAddressRequest,
     WorkerAddressResponse,
-    WorkerHeartbeat,
+    WorkerHeartbeatPing,
+    WorkerHeartbeatPong,
 )
 from langport.utils import build_logger
 
@@ -54,9 +56,11 @@ async def get_worker_address(request: WorkerAddressRequest):
 
 
 @app.post("/receive_heart_beat")
-async def receive_heart_beat(request: WorkerHeartbeat):
+async def receive_heart_beat(request: WorkerHeartbeatPing):
     exist = app.controller.receive_heart_beat(request)
-    return {"exist": exist}
+    return WorkerHeartbeatPong(
+        exist=exist
+    ).dict()
 
 
 @app.post("/get_worker_status")
@@ -87,5 +91,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     logger.info(f"args: {args}")
 
-    app.controller = Controller(args.dispatch_method, logger=logger)
+    controller_id = str(uuid.uuid4())
+
+    app.controller = Controller(f"http://{args.host}:{args.port}", controller_id, args.dispatch_method, logger=logger)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")

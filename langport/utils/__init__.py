@@ -24,7 +24,7 @@ moderation_msg = (
 handler = None
 
 
-def build_logger(logger_name, logger_filename):
+def build_logger(logger_name, logger_filename) -> logging.Logger:
     global handler
 
     formatter = logging.Formatter(
