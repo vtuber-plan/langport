@@ -80,6 +80,9 @@ if __name__ == "__main__":
 
     if args.worker_address is None:
         args.worker_address = f"http://{args.host}:{args.port}"
+    
+    if args.model_name is None:
+        args.model_name = os.path.basename(os.path.normpath(args.model_path))
 
     app.worker = EmbeddingModelWorker(
         controller_addr=args.controller_address,

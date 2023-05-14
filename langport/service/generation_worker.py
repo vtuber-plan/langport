@@ -132,7 +132,7 @@ if __name__ == "__main__":
     )
     add_model_args(parser)
     parser.add_argument("--model-name", type=str, help="Optional display name")
-    parser.add_argument("--limit-model-concurrency", type=int, default=4)
+    parser.add_argument("--limit-model-concurrency", type=int, default=32)
     parser.add_argument("--batch", type=int, default=4)
     parser.add_argument("--stream-interval", type=int, default=2)
     parser.add_argument("--no-register", action="store_true")
