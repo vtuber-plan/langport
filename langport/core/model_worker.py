@@ -161,6 +161,9 @@ class ModelWorker(BaseWorker):
                 raise ValueError("Bad chunk type.")
         
         del self.output_queue[task_id]
+
+    def num_tasks(self) -> int:
+        return self.task_queue.qsize()
     
     def fetch_tasks(self) -> List[BaseWorkerResult]:
         task_batch = []

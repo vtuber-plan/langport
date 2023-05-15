@@ -33,7 +33,7 @@ from langport.protocol.openai_api_protocol import (
     ModelPermission,
     UsageInfo,
 )
-from langport.protocol.worker_protocol import WorkerAddressRequest
+from langport.protocol.worker_protocol import BaseWorkerResult, GenerationWorkerResult, WorkerAddressRequest
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +60,15 @@ async def validation_exception_handler(request, exc):
     return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
 
 
-async def check_model(request) -> Optional[JSONResponse]:
+
+async def check_model(request, request_type: str) -> Optional[JSONResponse]:
     controller_address = app_settings.controller_address
     ret = None
     async with httpx.AsyncClient() as client:
         try:
-            _worker_addr = await _get_worker_address(request.model, client)
+            _worker_addr = await _get_worker_address(
+                request.model, request_type, client
+            )
         except:
             models_ret = await client.post(controller_address + "/list_models")
             models = models_ret.json()["models"]
@@ -76,9 +79,9 @@ async def check_model(request) -> Optional[JSONResponse]:
     return ret
 
 
-async def check_length(request, prompt, max_tokens):
+async def check_length(request, request_type: str, prompt, max_tokens):
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(request.model, client)
+        worker_addr = await _get_worker_address(request.model, request_type, client)
 
         response = await client.post(
             worker_addr + "/model_details",
@@ -151,9 +154,8 @@ def check_requests(request) -> Optional[JSONResponse]:
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.stop} is not valid under any of the given schemas - 'stop'",
         )
-    
-    return None
 
+    return None
 
 def get_gen_params(
     model_name: str,
@@ -215,12 +217,15 @@ def get_gen_params(
     return gen_params
 
 
+
 @retry(stop=stop_after_attempt(5))
-async def _get_worker_address(model_id: str, client: httpx.AsyncClient) -> str:
+async def _get_worker_address(
+    model_name: str, worker_type: str, client: httpx.AsyncClient
+) -> str:
     """
     Get worker address based on the requested model
 
-    :param model_id: The worker's model id
+    :param model_name: The worker's model name
     :param client: The httpx client to use
     :return: Worker address from the controller
     :raises: :class:`ValueError`: No available worker for requested model
@@ -228,15 +233,19 @@ async def _get_worker_address(model_id: str, client: httpx.AsyncClient) -> str:
     controller_address = app_settings.controller_address
 
     ret = await client.post(
-        controller_address + "/get_worker_address", json=WorkerAddressRequest(worker_id=model_id)
+        controller_address + "/get_worker_address",
+        json=WorkerAddressRequest(
+            model_name=model_name, worker_type=worker_type
+        ).dict(),
     )
     worker_addr = ret.json()["address"]
     # No available worker
     if worker_addr == "":
-        raise ValueError(f"No available worker for {model_id}")
+        raise ValueError(f"No available worker for {model_name}")
 
-    logger.debug(f"model_id: {model_id}, worker_addr: {worker_addr}")
+    logger.debug(f"model_name: {model_name}, worker_addr: {worker_addr}")
     return worker_addr
+
 
 
 @app.get("/v1/models")
@@ -253,11 +262,12 @@ async def show_available_models():
         model_cards.append(ModelCard(id=m, root=m, permission=[ModelPermission()]))
     return ModelList(data=model_cards)
 
+
 @app.post("/v1/engines/codegen/completions")
 @app.post("/v1/engines/copilot-codex/completions")
 @app.post("/v1/completions")
 async def create_completion(request: CompletionRequest):
-    error_check_ret = await check_model(request)
+    error_check_ret = await check_model(request, "generation")
     if error_check_ret is not None:
         return error_check_ret
     error_check_ret = check_requests(request)
@@ -279,30 +289,26 @@ async def create_completion(request: CompletionRequest):
         generator = generate_completion_stream_generator(payload, request.n)
         return StreamingResponse(generator, media_type="text/event-stream")
     else:
-        text_completions = []
+        completions = []
         for i in range(request.n):
             content = asyncio.create_task(generate_completion(payload))
-            text_completions.append(content)
-
-        try:
-            all_tasks = await asyncio.gather(*text_completions)
-        except Exception as e:
-            return create_error_response(ErrorCode.INTERNAL_ERROR, str(e))
+            completions.append(content)
 
         choices = []
         usage = UsageInfo()
-        for i, content in enumerate(all_tasks):
-            if content["error_code"] != 0:
-                return create_error_response(content["error_code"], content["text"])
+        for i, content_task in enumerate(completions):
+            content = await content_task
+            if content.error_code != ErrorCode.OK:
+                return create_error_response(content.error_code, content.message)
             choices.append(
                 CompletionResponseChoice(
                     index=i,
-                    text=content["text"],
-                    logprobs=content.get("logprobs", None),
-                    finish_reason=content.get("finish_reason", "stop"),
+                    text=content.text,
+                    logprobs=content.logprobs,
+                    finish_reason=content.finish_reason,
                 )
             )
-            task_usage = UsageInfo.parse_obj(content["usage"])
+            task_usage = UsageInfo.parse_obj(content.usage)
             for usage_key, usage_value in task_usage.dict().items():
                 setattr(usage, usage_key, getattr(usage, usage_key) + usage_value)
 
@@ -315,72 +321,72 @@ async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
     model_name = payload["model"]
     id = f"cmpl-{shortuuid.random()}"
     finish_stream_events = []
+
     for i in range(n):
         previous_text = ""
-        async for content in generate_completion_stream(payload):
-            if content["error_code"] != 0:
-                yield f"data: {json.dumps(content, ensure_ascii=False)}\n\n"
+        async for content in generate_completion_stream("/completion_stream", payload):
+            if content.error_code != ErrorCode.OK:
+                yield f"data: {json.dumps(content.dict(), ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
                 return
-            decoded_unicode = content["text"].replace("\ufffd", "")
+            decoded_unicode = content.text.replace("\ufffd", "")
             delta_text = decoded_unicode[len(previous_text) :]
             previous_text = decoded_unicode
 
             choice_data = CompletionResponseStreamChoice(
                 index=i,
                 text=delta_text,
-                logprobs=content.get("logprobs", None),
-                finish_reason=content.get("finish_reason", None),
+                logprobs=content.logprobs,
+                finish_reason=content.finish_reason,
             )
             chunk = CompletionStreamResponse(
                 id=id, object="text_completion", choices=[choice_data], model=model_name
             )
             if len(delta_text) == 0:
-                if content.get("finish_reason", None) is not None:
+                if content.finish_reason is not None:
                     finish_stream_events.append(chunk)
                 continue
             yield f"data: {chunk.json(exclude_unset=True, ensure_ascii=False)}\n\n"
+
     # There is not "content" field in the last delta message, so exclude_none to exclude field "content".
     for finish_chunk in finish_stream_events:
         yield f"data: {finish_chunk.json(exclude_unset=True, ensure_ascii=False)}\n\n"
     yield "data: [DONE]\n\n"
 
 
-async def generate_completion_stream(payload: Dict[str, Any]):
+async def generate_completion_stream(url: str, payload: Dict[str, Any]) -> Generator[GenerationWorkerResult, Any, None]:
     controller_address = app_settings.controller_address
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(payload["model"], client)
+        worker_addr = await _get_worker_address(payload["model"], "generation", client)
 
         delimiter = b"\0"
-        async with client.stream(
-            "POST",
-            worker_addr + "/completion_stream",
-            headers=headers,
-            json=payload,
-            timeout=WORKER_API_TIMEOUT,
-        ) as response:
-            # content = await response.aread()
-            async for raw_chunk in response.aiter_raw():
-                for chunk in raw_chunk.split(delimiter):
-                    if not chunk:
-                        continue
-                    data = json.loads(chunk.decode())
-                    yield data
+        try:
+            async with client.stream(
+                "POST",
+                worker_addr + url,
+                headers=headers,
+                json=payload,
+                timeout=WORKER_API_TIMEOUT,
+            ) as response:
+                async for raw_chunk in response.aiter_raw():
+                    for chunk in raw_chunk.split(delimiter):
+                        if not chunk:
+                            continue
+                        data = json.loads(chunk.decode())
+                        yield GenerationWorkerResult.parse_obj(data)
+        except httpx.ReadTimeout:
+            yield BaseWorkerResult(
+                type="error",
+                message="Server is overloading",
+                error_code=ErrorCode.ENGINE_OVERLOADED
+            )
 
 
-async def generate_completion(payload: Dict[str, Any]):
-    controller_address = app_settings.controller_address
-    async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(payload["model"], client)
-
-        response = await client.post(
-            worker_addr + "/completion",
-            headers=headers,
-            json=payload,
-            timeout=WORKER_API_TIMEOUT,
-        )
-        completion = response.json()
-        return completion
+async def generate_completion(payload: Dict[str, Any]) -> Optional[GenerationWorkerResult]:
+    ret = None
+    async for content in generate_completion_stream("/completion_stream", payload):
+        ret = content
+    return ret
 
 
 if __name__ == "__main__":

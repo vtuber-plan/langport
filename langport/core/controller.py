@@ -50,6 +50,7 @@ class WorkerInfo:
     worker_id: str
     worker_type: str
     worker_addr: str
+    check_heart_beat: bool
     status: Optional[WorkerStatus]
     update_time: int
 
@@ -102,6 +103,7 @@ class Controller(BaseWorker):
             worker_id=request.worker_id,
             worker_type=request.worker_type,
             worker_addr=request.worker_addr,
+            check_heart_beat=request.check_heart_beat,
             status=None,
             update_time=time.time(),
         )
@@ -199,7 +201,7 @@ class Controller(BaseWorker):
         expire = time.time() - CONTROLLER_HEART_BEAT_EXPIRATION
         to_delete = []
         for worker_id, w_info in self.worker_info.items():
-            if w_info.check_heart_beat and w_info.last_heart_beat < expire:
+            if w_info.check_heart_beat and w_info.update_time < expire:
                 self.logger.info(f"Worker hearbeat expiration: {worker_id}")
                 to_delete.append(worker_id)
 

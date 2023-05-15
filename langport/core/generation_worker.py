@@ -273,8 +273,11 @@ def batch_generation(
     del past_key_values
 
 
-def inference_generation(worker: "ModelWorker"):
+def inference_generation(worker: "ModelWorker", deadline_tick: bool):
     if not worker.online:
+        return
+    
+    if not deadline_tick and worker.num_tasks() < worker.max_batch:
         return
 
     tasks = worker.fetch_tasks()
@@ -338,7 +341,16 @@ class GenerationModelWorker(ModelWorker):
             "generation_inference",
             GENERATION_INFERENCE_INTERVAL,
             inference_generation,
-            args=[self],
+            args=[self, True],
+            kwargs=None,
+            workers=workers,
+        )
+
+        self.add_timer(
+            "generation_inference",
+            0.05,
+            inference_generation,
+            args=[self, False],
             kwargs=None,
             workers=workers,
         )
