@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 import requests
 from tenacity import retry, stop_after_attempt
 from langport.core.model_worker import ModelWorker
+from langport.model.executor.base import BaseModelExecutor
 
 from langport.protocol.worker_protocol import (
     BaseWorkerResult,
@@ -107,13 +108,7 @@ class EmbeddingModelWorker(ModelWorker):
         worker_addr: str,
         worker_id: str,
         worker_type: str,
-        model_path: str,
-        model_name: str,
-        device: str,
-        num_gpus: int,
-        max_gpu_memory,
-        load_8bit: bool,
-        cpu_offloading: bool,
+        executor: BaseModelExecutor,
         limit_model_concurrency: int,
         max_batch: int,
         stream_interval: int,
@@ -124,13 +119,7 @@ class EmbeddingModelWorker(ModelWorker):
             worker_addr=worker_addr,
             worker_id=worker_id,
             worker_type=worker_type,
-            model_path=model_path,
-            model_name=model_name,
-            device=device,
-            num_gpus=num_gpus,
-            max_gpu_memory=max_gpu_memory,
-            load_8bit=load_8bit,
-            cpu_offloading=cpu_offloading,
+            executor=executor,
             limit_model_concurrency=limit_model_concurrency,
             max_batch=max_batch,
             stream_interval=stream_interval,

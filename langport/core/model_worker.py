@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 import requests
 from tenacity import retry, stop_after_attempt
 from langport.core.base_worker import BaseWorker
+from langport.model.executor.base import BaseModelExecutor
 from langport.model.model_holder import LanguageModelHolder
 
 from langport.protocol.worker_protocol import (
@@ -43,13 +44,7 @@ class ModelWorker(BaseWorker):
         worker_addr: str,
         worker_id: str,
         worker_type: str,
-        model_path: str,
-        model_name: str,
-        device: str,
-        num_gpus: int,
-        max_gpu_memory,
-        load_8bit: bool,
-        cpu_offloading: bool,
+        executor: BaseModelExecutor,
         limit_model_concurrency: int,
         max_batch: int,
         stream_interval: int,
@@ -63,13 +58,7 @@ class ModelWorker(BaseWorker):
             logger = logger,
         )
 
-        self.model_path = model_path
-        self.model_name = model_name
-        self.device = device
-        self.num_gpus = num_gpus
-        self.max_gpu_memory = max_gpu_memory
-        self.load_8bit = load_8bit
-        self.cpu_offloading = cpu_offloading
+        
         self.limit_model_concurrency = limit_model_concurrency
         self.max_batch = max_batch
         self.stream_interval = stream_interval
@@ -81,15 +70,7 @@ class ModelWorker(BaseWorker):
             f"Loading the model {self.model_name} on worker {worker_id} ..."
         )
 
-        self.model_holder = LanguageModelHolder(
-            model_path=model_path,
-            model_name=model_name,
-            device=device,
-            num_gpus=num_gpus,
-            max_gpu_memory=max_gpu_memory,
-            load_8bit=load_8bit,
-            cpu_offloading=cpu_offloading
-        )
+        self.executor = executor
 
         self.context_len = self.model_holder.context_len
 

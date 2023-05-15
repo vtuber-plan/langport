@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from langport.core.embedding_worker import EmbeddingModelWorker
 
 import uvicorn
+from langport.model.executor.huggingface import LanguageModelExecutor
 
 from langport.model.model_adapter import add_model_args
 from langport.protocol.worker_protocol import EmbeddingsTask
@@ -84,11 +85,7 @@ if __name__ == "__main__":
     if args.model_name is None:
         args.model_name = os.path.basename(os.path.normpath(args.model_path))
 
-    app.worker = EmbeddingModelWorker(
-        controller_addr=args.controller_address,
-        worker_addr=args.worker_address,
-        worker_id=worker_id,
-        worker_type="embedding",
+    executor = LanguageModelExecutor(
         model_path=args.model_path,
         model_name=args.model_name,
         device=args.device,
@@ -96,6 +93,14 @@ if __name__ == "__main__":
         max_gpu_memory=args.max_gpu_memory,
         load_8bit=args.load_8bit,
         cpu_offloading=args.cpu_offloading,
+    )
+
+    app.worker = EmbeddingModelWorker(
+        controller_addr=args.controller_address,
+        worker_addr=args.worker_address,
+        worker_id=worker_id,
+        worker_type="embedding",
+        executor=executor,
         limit_model_concurrency=args.limit_model_concurrency,
         max_batch=args.batch,
         stream_interval=args.stream_interval,
