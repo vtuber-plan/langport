@@ -2,6 +2,7 @@ import argparse
 import asyncio
 from collections import defaultdict
 import dataclasses
+import inspect
 import logging
 import json
 import os
@@ -22,17 +23,15 @@ from langport.constants import (
 from langport.utils.interval_timer import IntervalTimer
 
 
-class Node(object):
+class BaseNode(object):
     def __init__(
         self,
-        worker_addr: str,
-        worker_id: str,
-        worker_type: str,
+        node_addr: str,
+        node_id: str,
         logger: logging.Logger,
     ):
-        self.worker_addr = worker_addr
-        self.worker_id = worker_id
-        self.worker_type = worker_type
+        self.node_addr = node_addr
+        self.node_id = node_id
         self.logger = logger
         self.online = False
 
@@ -43,18 +42,24 @@ class Node(object):
 
         self.on_stop("stop_all_timers", self.stop_all_timers)
 
-    def start(self):
+    async def start(self):
         if self.online:
             return
         for name, fn in self.start_fn.items():
-            fn()
+            if inspect.iscoroutinefunction(fn):
+                await fn()
+            else:
+                fn()
         self.online = True
 
-    def stop(self):
+    async def stop(self):
         if not self.online:
             return
         for name, fn in self.stop_fn.items():
-            fn()
+            if inspect.iscoroutinefunction(fn):
+                await fn()
+            else:
+                fn()
         self.online = False
 
     def on_start(self, name: str, fn: Callable[[], None]):

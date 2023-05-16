@@ -20,12 +20,9 @@ from langport.constants import (
     CONTROLLER_STATUS_FRESH_INTERVAL,
     WORKER_API_TIMEOUT,
 )
-from langport.core.base_worker import BaseWorker
 from langport.protocol.worker_protocol import (
-    RemoveWorkerRequest,
-    RegisterWorkerRequest,
-    WorkerHeartbeatPing,
-    WorkerHeartbeatPong,
+    HeartbeatPing,
+    HeartbeatPong,
     WorkerStatus,
 )
 from langport.utils import server_error_msg

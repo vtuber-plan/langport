@@ -9,26 +9,36 @@ from langport.constants import ErrorCode
 
 
 class WorkerStatus(BaseModel):
-    worker_id: str
+    node_id: str
     model_name: str
     speed: int = 1
     queue_length: int
 
-class WorkerHeartbeatPing(BaseModel):
-    worker_id: str
-
-class WorkerHeartbeatPong(BaseModel):
-    exist: bool
-
-class RegisterWorkerRequest(BaseModel):
-    worker_id: str
-    worker_addr: str
-    worker_type: str
+class RegisterNodeRequest(BaseModel):
+    node_id: str
+    node_addr: str
     check_heart_beat: bool
 
-class RemoveWorkerRequest(BaseModel):
-    worker_id: str
+class RegisterNodeResponse(BaseModel):
+    node_id: str
 
+class RemoveNodeRequest(BaseModel):
+    node_id: str
+
+class RemoveNodeResponse(BaseModel):
+    node_id: str
+
+class HeartbeatPing(BaseModel):
+    node_id: str
+
+class HeartbeatPong(BaseModel):
+    exist: bool
+
+class NodeInfo(BaseModel):
+    node_id: str
+    node_addr: str
+    check_heart_beat: bool
+    refresh_time: int = Field(default_factory=lambda: int(time.time()))
 
 class WorkerAddressRequest(BaseModel):
     model_name: str

@@ -15,15 +15,11 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 import requests
 from tenacity import retry, stop_after_attempt
-from langport.core.base_worker import BaseWorker
 from langport.model.executor.base import BaseModelExecutor
-from langport.model.model_holder import LanguageModelHolder
 
 from langport.protocol.worker_protocol import (
     BaseWorkerResult,
     BaseWorkerTask,
-    RegisterWorkerRequest,
-    RemoveWorkerRequest,
     WorkerStatus,
 )
 
@@ -32,7 +28,6 @@ from langport.constants import (
     WORKER_HEART_BEAT_INTERVAL,
     ErrorCode,
 )
-from langport.model.model_adapter import load_model
 from langport.utils import server_error_msg, pretty_print_semaphore
 from langport.utils.interval_timer import IntervalTimer
 

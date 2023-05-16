@@ -1,7 +1,9 @@
 
 from concurrent.futures import ThreadPoolExecutor
+import inspect
 import threading
 import time
+import asyncio
 import traceback
 from typing import Any, Iterable, Mapping, Optional
 
@@ -29,7 +31,11 @@ class IntervalTimer(object):
     
     def function_wrapper(self, args: Optional[Iterable[Any]]=None, kwargs: Optional[Mapping[str, Any]]=None):
         try:
-            self.fn(*args, **kwargs)
+            loop = asyncio.new_event_loop()
+            if inspect.iscoroutinefunction(self.fn):
+                loop.run_until_complete(self.fn(*args, **kwargs))
+            else:
+                self.fn(*args, **kwargs)
         except:
             traceback.print_exc()
     

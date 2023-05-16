@@ -64,12 +64,12 @@ async def api_get_worker_status(request: Request):
 
 @app.on_event("startup")
 async def startup_event():
-    app.controller.start()
+    await app.controller.start()
 
 
 @app.on_event("shutdown")
-def shutdown_event():
-    app.controller.stop()
+async def shutdown_event():
+    await app.controller.stop()
 
 
 if __name__ == "__main__":
