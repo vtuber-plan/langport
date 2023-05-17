@@ -18,6 +18,8 @@ from tenacity import retry, stop_after_attempt
 from langport.core.base_node import BaseNode
 
 from langport.protocol.worker_protocol import (
+    GetNodeStateRequest,
+    GetNodeStateResponse,
     NodeInfo,
     NodeInfoRequest,
     NodeInfoResponse,
@@ -39,9 +41,10 @@ from langport.constants import (
     ErrorCode,
 )
 from langport.utils.interval_timer import IntervalTimer
+from cachetools import cached, LRUCache, TTLCache
 
 
-class WorkerNode(BaseNode):
+class ClusterNode(BaseNode):
     def __init__(
         self,
         node_addr: str,
@@ -49,7 +52,7 @@ class WorkerNode(BaseNode):
         init_neighborhoods_addr: List[str],
         logger: logging.Logger,
     ):
-        super(WorkerNode, self).__init__(
+        super(ClusterNode, self).__init__(
             node_addr=node_addr,
             node_id=node_id,
             logger=logger,
@@ -57,6 +60,8 @@ class WorkerNode(BaseNode):
         self.init_neighborhoods_addr: List[str] = init_neighborhoods_addr
         self.neighborhoods: Dict[str, NodeInfo] = {}
         self.headers = {"User-Agent": "LangPort nodes"}
+        self.states: List[str, Any] = {}
+        self.remote_states: Dict[str, Dict[str, Any]] = defaultdict(dict)
 
         # timers
         self.add_timer(
@@ -247,7 +252,33 @@ class WorkerNode(BaseNode):
             if time.time() - node_info.refresh_time > HEART_BEAT_EXPIRATION:
                 self.logger.info(f"Node {node_id} is expired.")
                 self._remove_node(node_id)
-        
+    
+    @TTLCache(maxsize=1024, ttl=16)
+    async def request_node_state(self, node_addr: str, name: str) -> GetNodeStateResponse:
+        data = GetNodeStateRequest(
+            state_name=name,
+        )
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                node_addr + "/get_node_state",
+                headers=self.headers,
+                json=data.dict(),
+                timeout=WORKER_API_TIMEOUT,
+            )
+            ret = GetNodeStateResponse.parse_obj(response.json())
+  
+        return ret
+    
+    async def get_node_state(self, node_id: str, name: str) -> Any:
+        node_addr = self.neighborhoods[node_id]
+        response = await self.request_node_state(node_addr, name)
+        self.remote_states[node_id][name] = json.loads(response.state_value)
+        return self.remote_states[node_id][name]
+    
+    async def set_local_state(self, name: str, value: Any):
+        self.states[name] = value
+
     async def api_register_node(self, request: RegisterNodeRequest) -> RegisterNodeResponse:
         if request.node_id not in self.neighborhoods:
             self.logger.info(f"Register {request.node_id} on {self.node_id}")
@@ -290,3 +321,13 @@ class WorkerNode(BaseNode):
                 check_heart_beat=True,
             )
         )
+    
+    async def api_return_node_state(self, request: GetNodeStateRequest) -> GetNodeStateResponse:
+        if request.state_name in self.states:
+            return GetNodeStateResponse(
+                state_value=json.dumps(self.states[request.state_name])
+            )
+        else:
+            return GetNodeStateResponse(
+                state_value=json.dumps(None)
+            )

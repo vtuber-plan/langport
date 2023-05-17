@@ -49,22 +49,23 @@ class NodeListRequest(BaseModel):
 class NodeListResponse(BaseModel):
     nodes: List[NodeInfo]
 
+class ListNodeStatesRequest(BaseModel):
+    pass
+
+class ListNodeStatesResponse(BaseModel):
+    states: List[str]
+
+class GetNodeStateRequest(BaseModel):
+    state_name: str
+
+class GetNodeStateResponse(BaseModel):
+    state_value: str
 
 class NodeInfoRequest(BaseModel):
     node_id: str
 
 class NodeInfoResponse(BaseModel):
     node_info: NodeInfo
-
-class WorkerAddressRequest(BaseModel):
-    model_name: str
-    worker_type: str
-
-class WorkerAddressResponse(BaseModel):
-    address: str
-
-class ListModelsResponse(BaseModel):
-    models: List[str]
 
 
 class BaseWorkerTask(BaseModel):

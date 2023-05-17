@@ -14,30 +14,15 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 import requests
 from tenacity import retry, stop_after_attempt
-from langport.core.model_worker import ModelWorker
 from langport.model.executor.base import BaseModelExecutor
 
 from langport.protocol.worker_protocol import (
     BaseWorkerResult,
-    EmbeddingWorkerResult,
-    EmbeddingsTask,
-    GenerationTask,
-    GenerationWorkerResult,
-    RegisterWorkerRequest,
-    RemoveWorkerRequest,
-    UsageInfo,
-    WorkerStatus,
 )
 
 import torch
 
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
-from transformers.generation.stopping_criteria import (
-    StoppingCriteria,
-    StoppingCriteriaList,
-    MaxLengthCriteria,
-    MaxNewTokensCriteria,
-)
 from transformers.generation.logits_process import (
     LogitsProcessor,
     LogitsProcessorList,

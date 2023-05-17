@@ -13,15 +13,13 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 import requests
 from tenacity import retry, stop_after_attempt
-from langport.core.model_worker import ModelWorker
+from langport.core.cluster_worker import ClusterWorker
 from langport.model.executor.base import BaseModelExecutor
 
 from langport.protocol.worker_protocol import (
     BaseWorkerResult,
     EmbeddingWorkerResult,
     EmbeddingsTask,
-    RegisterWorkerRequest,
-    RemoveWorkerRequest,
     UsageInfo,
     WorkerStatus,
 )
@@ -38,7 +36,7 @@ from langport.model.model_adapter import load_model
 from langport.utils import server_error_msg, pretty_print_semaphore
 
 
-def inference_embeddings(worker: "ModelWorker"):
+def inference_embeddings(worker: "EmbeddingModelWorker"):
     if not worker.online:
         return
     tasks = worker.fetch_tasks()
@@ -101,30 +99,28 @@ def inference_embeddings(worker: "ModelWorker"):
         )
 
 
-class EmbeddingModelWorker(ModelWorker):
+class EmbeddingModelWorker(ClusterWorker):
     def __init__(
         self,
-        controller_addr: str,
-        worker_addr: str,
-        worker_id: str,
-        worker_type: str,
+        node_addr: str,
+        node_id: str,
+        init_neighborhoods_addr: List[str],
         executor: BaseModelExecutor,
         limit_model_concurrency: int,
         max_batch: int,
         stream_interval: int,
-        logger,
+        logger
     ):
         super(EmbeddingModelWorker, self).__init__(
-            controller_addr=controller_addr,
-            worker_addr=worker_addr,
-            worker_id=worker_id,
-            worker_type=worker_type,
-            executor=executor,
+            node_addr=node_addr,
+            node_id=node_id,
+            init_neighborhoods_addr=init_neighborhoods_addr,
             limit_model_concurrency=limit_model_concurrency,
             max_batch=max_batch,
             stream_interval=stream_interval,
             logger=logger,
         )
+        self.executor = executor
         workers = max(1, 2 * self.limit_model_concurrency // self.max_batch)
         self.add_timer(
             "embeddings_inference", 
@@ -134,6 +130,11 @@ class EmbeddingModelWorker(ModelWorker):
             kwargs=None, 
             workers=workers
         )
+        
+        self.on_start("set_features", self.set_features)
+
+    async def set_features(self):
+        await self.set_local_state("features", ["embedding"])
 
     def get_embeddings(self, task: EmbeddingsTask):
         self.add_task(task)

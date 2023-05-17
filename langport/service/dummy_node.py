@@ -9,8 +9,9 @@ import numpy as np
 import requests
 import uvicorn
 
-from langport.core.worker_node import WorkerNode
+from langport.core.cluster_node import ClusterNode
 from langport.protocol.worker_protocol import (
+    GetNodeStateRequest,
     HeartbeatPing,
     HeartbeatPong,
     NodeInfoRequest,
@@ -65,6 +66,11 @@ async def return_node_info(request: NodeInfoRequest):
     response = await app.node.api_return_node_info(request)
     return response.dict()
 
+@app.post("/api_get_node_state")
+async def api_return_node_state(request: GetNodeStateRequest):
+    response = await app.node.api_return_node_state(request)
+    return response.dict()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -76,5 +82,5 @@ if __name__ == "__main__":
 
     node_id = str(uuid.uuid4())
     node_addr = f"http://{args.host}:{args.port}"
-    app.node = WorkerNode(node_addr, node_id, args.neighbors, logger=logger)
+    app.node = ClusterNode(node_addr, node_id, args.neighbors, logger=logger)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
