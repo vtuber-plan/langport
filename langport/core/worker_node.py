@@ -19,6 +19,8 @@ from langport.core.base_node import BaseNode
 
 from langport.protocol.worker_protocol import (
     NodeInfo,
+    NodeInfoRequest,
+    NodeInfoResponse,
     NodeListRequest,
     NodeListResponse,
     RegisterNodeRequest,
@@ -102,7 +104,21 @@ class WorkerNode(BaseNode):
     
     async def get_all_init_neighborhoods(self):
         for neighbor_addr in self.init_neighborhoods_addr:
-            response = await self.register_node(neighbor_addr, self.node_id, self.node_addr)
+            info = await self.get_node_info(neighbor_addr)
+            self._add_node(info.node_id, info.node_addr, info.check_heart_beat)
+        # add self
+        self._add_node(self.node_id, self.node_addr, True)
+    
+    async def get_node_info(self, node_addr: str) -> NodeInfo:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                node_addr + "/node_info",
+                headers=self.headers,
+                json=NodeInfoRequest(node_id=self.node_id).dict(),
+                timeout=WORKER_API_TIMEOUT,
+            )
+        remote_node_info = NodeInfoResponse.parse_obj(response.json())
+        return remote_node_info.node_info
 
     async def register_node(self, target_node_addr: str, register_node_id: str, register_node_addr: str) -> bool:
         self.logger.info(f"Register {register_node_addr} to node {target_node_addr}")
@@ -133,17 +149,20 @@ class WorkerNode(BaseNode):
                 self._update_node(node_id=node.node_id, node_addr=node.node_addr)
             return True
 
-    async def register_node_broadcast(self, node_id: str, node_addr: str):
-        self.logger.info(f"Register node broadcast. node_id: {node_id}, node_addr: {node_addr}")
+    async def register_node_broadcast(self, register_node_id: str, register_node_addr: str):
+        self.logger.info(f"Register node broadcast. node_id: {register_node_id}, node_addr: {register_node_addr}")
 
-        for node_id, node_info in self.neighborhoods.items():
-            await self.register_node(node_info.node_addr, node_id, node_addr)
+        neighborhoods = [(k, v) for k, v in self.neighborhoods.items()]
+        for node_id, node_info in neighborhoods:
+            if node_info.node_addr == register_node_addr:
+                continue
+            await self.register_node(node_info.node_addr, register_node_id, register_node_addr)
     
     async def register_self_node_broadcast(self):
         await self.register_node_broadcast(self.node_id, self.node_addr)
 
-    async def remove_node(self, target_node_addr: str, removed_node_id) -> bool:
-        self.logger.info("Remove node")
+    async def remove_node(self, target_node_addr: str, removed_node_id: str) -> bool:
+        self.logger.info(f"Remove node {removed_node_id} from {target_node_addr}")
 
         if target_node_addr == self.node_addr:
             return True
@@ -163,13 +182,16 @@ class WorkerNode(BaseNode):
 
         return True
 
-    async def remove_node_broadcast(self, node_addr: str):
-        self.logger.info(f"Remove node broadcast. node_addr: {node_addr}")
-        for node_id, node_info in self.neighborhoods.items():
-            await self.remove_node(node_info.node_addr, node_addr)
+    async def remove_node_broadcast(self, removed_node_id: str):
+        self.logger.info(f"Remove node broadcast. node_addr: {removed_node_id}")
+        neighborhoods = [(k, v) for k, v in self.neighborhoods.items()]
+        for node_id, node_info in neighborhoods:
+            if node_id == removed_node_id:
+                continue
+            await self.remove_node(node_info.node_addr, removed_node_id)
 
     async def remove_self_node_broadcast(self):
-        await self.remove_node_broadcast(self.node_addr)
+        await self.remove_node_broadcast(self.node_id)
 
     async def send_heartbeat(self, node_addr: str):
         data = HeartbeatPing(
@@ -246,7 +268,7 @@ class WorkerNode(BaseNode):
             self._remove_node(request.node_id)
 
             # broacast again
-            await self.remove_node_broadcast(request.node_addr)
+            await self.remove_node_broadcast(request.node_id)
         return RemoveNodeResponse(node_id=self.node_id)
     
     async def api_receive_heartbeat(self, request: HeartbeatPing) -> HeartbeatPong:
@@ -259,3 +281,12 @@ class WorkerNode(BaseNode):
     async def api_return_node_list(self, request: NodeListRequest) -> NodeListResponse:
         node_list = [node_info for node_id, node_info in self.neighborhoods.items()]
         return NodeListResponse(nodes=node_list)
+    
+    async def api_return_node_info(self, request: NodeInfoRequest) -> NodeInfoResponse:
+        return NodeInfoResponse(
+            node_info=NodeInfo(
+                node_id=self.node_id,
+                node_addr=self.node_addr,
+                check_heart_beat=True,
+            )
+        )

@@ -49,6 +49,13 @@ class NodeListRequest(BaseModel):
 class NodeListResponse(BaseModel):
     nodes: List[NodeInfo]
 
+
+class NodeInfoRequest(BaseModel):
+    node_id: str
+
+class NodeInfoResponse(BaseModel):
+    node_info: NodeInfo
+
 class WorkerAddressRequest(BaseModel):
     model_name: str
     worker_type: str
