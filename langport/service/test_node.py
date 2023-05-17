@@ -13,14 +13,10 @@ from langport.core.worker_node import WorkerNode
 from langport.protocol.worker_protocol import (
     HeartbeatPing,
     HeartbeatPong,
-    ListModelsResponse,
     NodeInfoRequest,
     NodeListRequest,
     RegisterNodeRequest,
     RemoveNodeRequest,
-    WorkerAddressRequest,
-    WorkerAddressResponse,
-
 )
 from langport.utils import build_logger
 
@@ -63,7 +59,6 @@ async def return_node_list(request: NodeListRequest):
 async def return_node_info(request: NodeInfoRequest):
     response = await app.node.api_return_node_info(request)
     return response.dict()
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
