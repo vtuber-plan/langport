@@ -5,14 +5,15 @@ import asyncio
 import json
 import logging
 
-import os
 from typing import Generator, Optional, Union, Dict, List, Any
 
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware, DispatchFunction
 import httpx
 import shortuuid
+from starlette.types import ASGIApp
 from tenacity import retry, stop_after_attempt
 import uvicorn
 from pydantic import BaseSettings
@@ -60,8 +61,26 @@ class AppSettings(BaseSettings):
 app_settings = AppSettings()
 
 app = fastapi.FastAPI(debug=True)
-headers = {"User-Agent": "FastChat API Server"}
+headers = {"User-Agent": "Langport API Server"}
 
+class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: ASGIApp, sk:str, dispatch: DispatchFunction | None = None) -> None:
+        super().__init__(app, dispatch)
+        self.sk = sk
+
+    async def dispatch(self, request, call_next):
+        authorization = request.headers.get("Authorization")
+        if request.url.path not in ["/docs","/redoc","/openapi.json"] and (
+            not authorization 
+            or authorization.split(" ")[0].lower() != "bearer" 
+            or authorization.split(" ")[1] != self.sk
+        ):
+            return JSONResponse(
+                status_code=401,
+                content={"msg":"Not authenticated"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return await call_next(request)
 
 def create_error_response(code: int, message: str) -> JSONResponse:
     return JSONResponse(
@@ -549,12 +568,13 @@ async def get_embedding(payload: Dict[str, Any]) -> EmbeddingWorkerResult:
         return EmbeddingWorkerResult.parse_obj(response.json())
 
 
-if __name__ == "__main__":
+if __name__ in ["__main__", "langport.service.openai_api"]:
     parser = argparse.ArgumentParser(
-        description="FastChat ChatGPT-Compatible RESTful API server."
+        description="Langport ChatGPT-Compatible RESTful API server."
     )
     parser.add_argument("--host", type=str, default="localhost", help="host name")
     parser.add_argument("--port", type=int, default=8000, help="port number")
+    parser.add_argument("--sk", type=str, default=None, help="security key")
     parser.add_argument(
         "--controller-address", type=str, default="http://localhost:21001"
     )
@@ -579,14 +599,20 @@ if __name__ == "__main__":
         allow_methods=args.allowed_methods,
         allow_headers=args.allowed_headers,
     )
+    if args.sk is not None:
+        app.add_middleware(
+            BaseAuthorizationMiddleware,
+            sk=args.sk,
+        )
     app_settings.controller_address = args.controller_address
 
     logger.debug(f"==== args ====\n{args}")
 
-    uvicorn.run(
-        "langport.service.openai_api:app",
-        host=args.host,
-        port=args.port,
-        log_level="info",
-        reload=True,
-    )
+    if __name__ == "__main__":
+        uvicorn.run(
+            "langport.service.openai_api:app",
+            host=args.host,
+            port=args.port,
+            log_level="info",
+            reload=True,
+        )
