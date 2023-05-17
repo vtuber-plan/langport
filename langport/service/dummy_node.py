@@ -21,9 +21,10 @@ from langport.protocol.worker_protocol import (
 from langport.utils import build_logger
 
 
-logger = build_logger("langport.service.test_node", "test_node.log")
+logger = build_logger("langport.service.dummy_node", "dummy_node.log")
 
 app = FastAPI()
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -33,6 +34,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     await app.node.stop()
+
 
 @app.post("/register_node")
 async def register_node(request: RegisterNodeRequest):
@@ -45,20 +47,24 @@ async def remove_node(request: RemoveNodeRequest):
     response = await app.node.api_remove_node(request)
     return response.dict()
 
+
 @app.post("/heartbeat")
 async def receive_heartbeat(request: HeartbeatPing):
     response = await app.node.api_receive_heartbeat(request)
     return response.dict()
+
 
 @app.post("/node_list")
 async def return_node_list(request: NodeListRequest):
     response = await app.node.api_return_node_list(request)
     return response.dict()
 
+
 @app.post("/node_info")
 async def return_node_info(request: NodeInfoRequest):
     response = await app.node.api_return_node_info(request)
     return response.dict()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
