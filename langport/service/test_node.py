@@ -14,6 +14,7 @@ from langport.protocol.worker_protocol import (
     HeartbeatPing,
     HeartbeatPong,
     ListModelsResponse,
+    NodeListRequest,
     RegisterNodeRequest,
     RemoveNodeRequest,
     WorkerAddressRequest,
@@ -47,9 +48,14 @@ async def remove_node(request: RemoveNodeRequest):
     response = await app.node.api_remove_node(request)
     return response.dict()
 
-@app.post("/receive_heartbeat")
+@app.post("/heartbeat")
 async def receive_heartbeat(request: HeartbeatPing):
     response = await app.node.api_receive_heartbeat(request)
+    return response.dict()
+
+@app.post("/node_list")
+async def return_node_list(request: NodeListRequest):
+    response = await app.node.api_return_node_list(request)
     return response.dict()
 
 if __name__ == "__main__":

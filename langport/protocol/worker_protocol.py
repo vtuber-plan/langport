@@ -14,6 +14,13 @@ class WorkerStatus(BaseModel):
     speed: int = 1
     queue_length: int
 
+class NodeInfo(BaseModel):
+    node_id: str
+    node_addr: str
+    check_heart_beat: bool
+    refresh_time: int = Field(default_factory=lambda: int(time.time()))
+
+
 class RegisterNodeRequest(BaseModel):
     node_id: str
     node_addr: str
@@ -21,6 +28,8 @@ class RegisterNodeRequest(BaseModel):
 
 class RegisterNodeResponse(BaseModel):
     node_id: str
+    node_addr: str
+    check_heart_beat: bool
 
 class RemoveNodeRequest(BaseModel):
     node_id: str
@@ -34,11 +43,11 @@ class HeartbeatPing(BaseModel):
 class HeartbeatPong(BaseModel):
     exist: bool
 
-class NodeInfo(BaseModel):
+class NodeListRequest(BaseModel):
     node_id: str
-    node_addr: str
-    check_heart_beat: bool
-    refresh_time: int = Field(default_factory=lambda: int(time.time()))
+
+class NodeListResponse(BaseModel):
+    nodes: List[NodeInfo]
 
 class WorkerAddressRequest(BaseModel):
     model_name: str
