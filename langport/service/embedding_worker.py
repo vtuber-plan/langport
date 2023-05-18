@@ -9,13 +9,13 @@ import uuid
 
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
-from langport.core.embedding_worker import EmbeddingModelWorker
+from langport.workers.embedding_worker import EmbeddingModelWorker
 
 import uvicorn
 from langport.model.executor.huggingface import LanguageModelExecutor
 
 from langport.model.model_adapter import add_model_args
-from langport.protocol.worker_protocol import EmbeddingsTask
+from langport.protocol.worker_protocol import EmbeddingsTask, GetNodeStateRequest, HeartbeatPing, NodeInfoRequest, NodeListRequest, RegisterNodeRequest, RemoveNodeRequest
 from langport.utils import build_logger
 
 app = FastAPI()
@@ -28,25 +28,54 @@ def create_background_tasks(worker):
 
 @app.post("/embeddings")
 async def api_embeddings(request: EmbeddingsTask):
-    await app.worker.acquire_model_semaphore()
-    embedding = app.worker.get_embeddings(request)
-    background_tasks = create_background_tasks(app.worker)
+    await app.node.acquire_model_semaphore()
+    embedding = app.node.get_embeddings(request)
+    background_tasks = create_background_tasks(app.node)
     return JSONResponse(content=embedding.dict(), background=background_tasks)
-
-
-@app.post("/get_worker_status")
-async def api_get_status(request: Request):
-    return app.worker.get_status()
-
 
 @app.on_event("startup")
 async def startup_event():
-    app.worker.start()
+    await app.node.start()
 
 
 @app.on_event("shutdown")
-def shutdown_event():
-    app.worker.stop()
+async def shutdown_event():
+    await app.node.stop()
+
+
+@app.post("/register_node")
+async def register_node(request: RegisterNodeRequest):
+    response = await app.node.api_register_node(request)
+    return response.dict()
+
+
+@app.post("/remove_node")
+async def remove_node(request: RemoveNodeRequest):
+    response = await app.node.api_remove_node(request)
+    return response.dict()
+
+
+@app.post("/heartbeat")
+async def receive_heartbeat(request: HeartbeatPing):
+    response = await app.node.api_receive_heartbeat(request)
+    return response.dict()
+
+
+@app.post("/node_list")
+async def return_node_list(request: NodeListRequest):
+    response = await app.node.api_return_node_list(request)
+    return response.dict()
+
+
+@app.post("/node_info")
+async def return_node_info(request: NodeInfoRequest):
+    response = await app.node.api_return_node_info(request)
+    return response.dict()
+
+@app.post("/api_get_node_state")
+async def api_return_node_state(request: GetNodeStateRequest):
+    response = await app.node.api_return_node_state(request)
+    return response.dict()
 
 
 if __name__ == "__main__":
@@ -54,9 +83,8 @@ if __name__ == "__main__":
     parser.add_argument("--host", type=str, default="localhost")
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--worker-address", type=str, default=None)
-    parser.add_argument(
-        "--controller-address", type=str, default="http://localhost:21001"
-    )
+    parser.add_argument("--neighbors", type=str, nargs="*", default=[])
+    
     add_model_args(parser)
     parser.add_argument("--model-name", type=str, help="Optional display name")
     parser.add_argument("--limit-model-concurrency", type=int, default=5)
@@ -65,8 +93,8 @@ if __name__ == "__main__":
     parser.add_argument("--no-register", action="store_true")
     args = parser.parse_args()
 
-    worker_id = str(uuid.uuid4())
-    logger = build_logger("model_worker", f"model_worker_{worker_id}.log")
+    node_id = str(uuid.uuid4())
+    logger = build_logger("model_worker", f"model_worker_{node_id}.log")
     logger.info(f"args: {args}")
 
     if args.gpus:
@@ -95,11 +123,10 @@ if __name__ == "__main__":
         cpu_offloading=args.cpu_offloading,
     )
 
-    app.worker = EmbeddingModelWorker(
-        controller_addr=args.controller_address,
-        worker_addr=args.worker_address,
-        worker_id=worker_id,
-        worker_type="embedding",
+    app.node = EmbeddingModelWorker(
+        node_addr=args.worker_address,
+        node_id=node_id,
+        init_neighborhoods_addr=[],
         executor=executor,
         limit_model_concurrency=args.limit_model_concurrency,
         max_batch=args.batch,

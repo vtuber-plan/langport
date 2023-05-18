@@ -32,7 +32,6 @@ from langport.constants import (
     EMBEDDING_INFERENCE_INTERVAL,
     ErrorCode,
 )
-from langport.model.model_adapter import load_model
 from langport.utils import server_error_msg, pretty_print_semaphore
 
 

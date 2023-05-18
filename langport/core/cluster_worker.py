@@ -12,7 +12,10 @@ import threading
 import queue
 import uuid
 
+
+from enum import Enum, auto
 import httpx
+import numpy as np
 import requests
 from tenacity import retry, stop_after_attempt
 from langport.core.base_node import BaseNode
@@ -32,7 +35,8 @@ from langport.protocol.worker_protocol import (
     RemoveNodeResponse,
     HeartbeatPing,
     HeartbeatPong,
-    WorkerStatus,
+    WorkerAddressRequest,
+    WorkerAddressResponse,
 )
 
 from langport.constants import (
@@ -44,18 +48,33 @@ from langport.constants import (
 from langport.utils.interval_timer import IntervalTimer
 
 
+class DispatchMethod(Enum):
+    LOTTERY = auto()
+    SHORTEST_QUEUE = auto()
+
+    @classmethod
+    def from_str(cls, name):
+        if name == "lottery":
+            return cls.LOTTERY
+        elif name == "shortest_queue":
+            return cls.SHORTEST_QUEUE
+        else:
+            raise ValueError(f"Invalid dispatch method")
+
+
 class ClusterWorker(ClusterNode):
     def __init__(
         self,
         node_addr: str,
         node_id: str,
         init_neighborhoods_addr: List[str],
+        dispatch_method: str,
         limit_model_concurrency: int,
         max_batch: int,
         stream_interval: int,
         logger: logging.Logger,
     ):
-        super(ClusterNode, self).__init__(
+        super(ClusterWorker, self).__init__(
             node_addr=node_addr,
             node_id=node_id,
             init_neighborhoods_addr=init_neighborhoods_addr,
@@ -65,6 +84,7 @@ class ClusterWorker(ClusterNode):
         self.limit_model_concurrency = limit_model_concurrency
         self.max_batch = max_batch
         self.stream_interval = stream_interval
+        self.dispatch_method = DispatchMethod.from_str(dispatch_method)
 
         self.global_counter = 0
         self.model_semaphore = None
@@ -155,3 +175,48 @@ class ClusterWorker(ClusterNode):
 
     def push_task_result(self, task_id: str, response: BaseWorkerResult):
         self.output_queue[task_id].put(response, block=True, timeout=WORKER_API_TIMEOUT)
+
+    async def get_worker_address(self, model_name: str, feature_tag: str) -> Optional[str]:
+        if self.dispatch_method == DispatchMethod.LOTTERY:
+            worker_ids = []
+            worker_speeds = []
+            for w_id, w_info in self.neighborhoods.items():
+                w_model_name = await self.get_node_state(w_info.node_id, "model_name")
+                w_features = await self.get_node_state(w_info.node_id, "features")
+                w_speed = await self.get_node_state(w_info.node_id, "speed")
+                if model_name == w_model_name and feature_tag in w_features:
+                    worker_ids.append(w_id)
+                    worker_speeds.append(w_speed)
+            worker_speeds = np.array(worker_speeds, dtype=np.float32)
+            norm = np.sum(worker_speeds)
+            if norm < 1e-4:
+                return ""
+            worker_speeds = worker_speeds / norm
+            pt = np.random.choice(np.arange(len(worker_ids)), p=worker_speeds)
+            node_id = worker_ids[pt]
+            return self.neighborhoods[node_id].node_addr
+
+        elif self.dispatch_method == DispatchMethod.SHORTEST_QUEUE:
+            worker_ids = []
+            worker_qlen = []
+            for w_id, w_info in self.neighborhoods.items():
+                w_model_name = await self.get_node_state(w_info.node_id, "model_name")
+                w_features = await self.get_node_state(w_info.node_id, "features")
+                w_speed = await self.get_node_state(w_info.node_id, "speed")
+                w_queue_length = await self.get_node_state(w_info.node_id, "queue_length")
+                if model_name == w_model_name and feature_tag in w_features:
+                    worker_ids.append(w_id)
+                    worker_qlen.append(w_queue_length / w_speed)
+            if len(worker_ids) == 0:
+                return ""
+            min_index = np.argmin(worker_qlen)
+            w_id = worker_ids[min_index]
+            return self.neighborhoods[w_id].node_addr
+        else:
+            raise ValueError(f"Invalid dispatch method: {self.dispatch_method}")
+
+    async def api_get_worker_address(self, request: WorkerAddressRequest) -> WorkerAddressResponse:
+        node_address = await self.get_worker_address(request.model_name, request.feature)
+        return WorkerAddressResponse(
+            node_address=node_address
+        )

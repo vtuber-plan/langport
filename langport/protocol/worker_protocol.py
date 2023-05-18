@@ -7,13 +7,6 @@ from pydantic import BaseModel, Field
 
 from langport.constants import ErrorCode
 
-
-class WorkerStatus(BaseModel):
-    node_id: str
-    model_name: str
-    speed: int = 1
-    queue_length: int
-
 class NodeInfo(BaseModel):
     node_id: str
     node_addr: str
@@ -66,6 +59,13 @@ class NodeInfoRequest(BaseModel):
 
 class NodeInfoResponse(BaseModel):
     node_info: NodeInfo
+
+class WorkerAddressRequest(BaseModel):
+    model_name: str
+    feature: str
+
+class WorkerAddressResponse(BaseModel):
+    node_address: Optional[str]
 
 
 class BaseWorkerTask(BaseModel):

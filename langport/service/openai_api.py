@@ -46,7 +46,6 @@ from langport.protocol.worker_protocol import (
     BaseWorkerResult,
     EmbeddingWorkerResult,
     GenerationWorkerResult,
-    WorkerAddressRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,7 +59,7 @@ class AppSettings(BaseSettings):
 app_settings = AppSettings()
 
 app = fastapi.FastAPI(debug=True)
-headers = {"User-Agent": "FastChat API Server"}
+headers = {"User-Agent": "LangPort API Server"}
 
 
 def create_error_response(code: int, message: str) -> JSONResponse:
