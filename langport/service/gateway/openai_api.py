@@ -84,8 +84,7 @@ async def check_model(request, request_type: str) -> Optional[JSONResponse]:
                 request.model, request_type, client
             )
         except:
-            models_ret = await client.post(controller_address + "/list_models")
-            models = models_ret.json()["models"]
+            models = await _list_models(request_type, client)
             ret = create_error_response(
                 ErrorCode.INVALID_MODEL,
                 f"Only {'&&'.join(models)} allowed now, your model {request.model}",
@@ -249,11 +248,11 @@ async def _get_worker_address(
 
     if dispatch == "lottery":
         payload = WorkerAddressRequest(
-            condition=f"{{model_name}}=={model_name} and {feature} in {{features}}", expression="{speed}"
+            condition=f"{{model_name}}=='{model_name}' and '{feature}' in {{features}}", expression="-{speed}"
         )
     elif dispatch == "shortest_queue":
         payload = WorkerAddressRequest(
-            condition=f"{{model_name}}=={model_name} and {feature} in {{features}}", expression="{queue_length}/{speed}"
+            condition=f"{{model_name}}=='{model_name}' and '{feature}' in {{features}}", expression="{queue_length}/{speed}"
         )
     else:
         raise Exception("Error dispatch method.")
@@ -263,7 +262,13 @@ async def _get_worker_address(
     )
     response = WorkerAddressResponse.parse_obj(ret.json())
     address_list = response.address_list
-    values = response.values
+    values = [json.loads(obj) for obj in response.values]
+
+    # sort
+    sorted_result = sorted(zip(address_list, values), key=lambda x: x[1])
+    address_list = [x[0] for x in sorted_result]
+    values = [x[1] for x in sorted_result]
+
     # No available worker
     if address_list == []:
         raise ValueError(f"No available worker for {model_name} and {feature}")
@@ -271,6 +276,28 @@ async def _get_worker_address(
     worker_addr = address_list[0]
     logger.debug(f"model_name: {model_name}, feature: {feature}, worker_addr: {worker_addr}")
     return worker_addr
+
+
+@retry(stop=stop_after_attempt(5))
+async def _list_models(feature: str, client: httpx.AsyncClient) -> str:
+    controller_address = app_settings.controller_address
+
+    payload = WorkerAddressRequest(
+        condition=f"'{feature}' in {{features}}", expression="{model_name}"
+    )
+
+    ret = await client.post(
+        controller_address + "/get_worker_address",
+        json=payload.dict(),
+    )
+    response = WorkerAddressResponse.parse_obj(ret.json())
+    address_list = response.address_list
+    models = [json.loads(obj) for obj in response.values]
+    # No available worker
+    if address_list == []:
+        raise ValueError(f"No available worker for {model_name} and {feature}")
+
+    return models
 
 
 @app.get("/v1/models")

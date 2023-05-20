@@ -66,7 +66,7 @@ class WorkerAddressRequest(BaseModel):
 
 class WorkerAddressResponse(BaseModel):
     address_list: List[str]
-    values: List[float]
+    values: List[str]
 
 
 class BaseWorkerTask(BaseModel):

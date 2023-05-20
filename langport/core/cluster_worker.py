@@ -196,7 +196,6 @@ class ClusterWorker(ClusterNode):
         worker_ids = []
         worker_values = []
         for w_id, w_info in self.neighborhoods.items():
-            # filter by expression
             final_condition = condition
             final_condition_variables = {}
             for v_name in condition_variables:
@@ -213,7 +212,8 @@ class ClusterWorker(ClusterNode):
 
             if safe_eval(final_condition, final_condition_variables):
                 worker_ids.append(w_id)
-                worker_values.append(safe_eval(final_expression, final_expression_variables))
+                value_json = json.dumps(safe_eval(final_expression, final_expression_variables))
+                worker_values.append(value_json)
         
         return worker_ids, worker_values
                 
