@@ -46,6 +46,8 @@ from langport.protocol.worker_protocol import (
     BaseWorkerResult,
     EmbeddingWorkerResult,
     GenerationWorkerResult,
+    WorkerAddressRequest,
+    WorkerAddressResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -232,30 +234,42 @@ def get_gen_params(
 
 @retry(stop=stop_after_attempt(5))
 async def _get_worker_address(
-    model_name: str, worker_type: str, client: httpx.AsyncClient
+    model_name: str, feature: str, client: httpx.AsyncClient, dispatch: str
 ) -> str:
     """
     Get worker address based on the requested model
 
     :param model_name: The worker's model name
+    :param feature: The worker's feature
     :param client: The httpx client to use
     :return: Worker address from the controller
     :raises: :class:`ValueError`: No available worker for requested model
     """
     controller_address = app_settings.controller_address
 
+    if dispatch == "lottery":
+        payload = WorkerAddressRequest(
+            condition=f"{{model_name}}=={model_name} and {feature} in {{features}}", expression="{speed}"
+        )
+    elif dispatch == "shortest_queue":
+        payload = WorkerAddressRequest(
+            condition=f"{{model_name}}=={model_name} and {feature} in {{features}}", expression="{queue_length}/{speed}"
+        )
+    else:
+        raise Exception("Error dispatch method.")
     ret = await client.post(
         controller_address + "/get_worker_address",
-        json=WorkerAddressRequest(
-            model_name=model_name, worker_type=worker_type
-        ).dict(),
+        json=payload.dict(),
     )
-    worker_addr = ret.json()["address"]
+    response = WorkerAddressResponse.parse_obj(ret.json())
+    address_list = response.address_list
+    values = response.values
     # No available worker
-    if worker_addr == "":
-        raise ValueError(f"No available worker for {model_name}")
+    if address_list == []:
+        raise ValueError(f"No available worker for {model_name} and {feature}")
 
-    logger.debug(f"model_name: {model_name}, worker_addr: {worker_addr}")
+    worker_addr = address_list[0]
+    logger.debug(f"model_name: {model_name}, feature: {feature}, worker_addr: {worker_addr}")
     return worker_addr
 
 

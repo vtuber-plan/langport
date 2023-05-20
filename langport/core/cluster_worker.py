@@ -6,6 +6,7 @@ from functools import partial
 import logging
 import json
 import os
+import re
 import time
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Union
 import threading
@@ -45,6 +46,7 @@ from langport.constants import (
     WORKER_HEART_BEAT_INTERVAL,
     ErrorCode,
 )
+from langport.utils.evaluation import safe_eval
 from langport.utils.interval_timer import IntervalTimer
 
 
@@ -96,12 +98,16 @@ class ClusterWorker(ClusterNode):
 
         self.on_start("set_queue_state", self.set_queue_state)
         self.on_start("set_features", self.set_features)
+        self.on_start("set_speed", self.set_speed)
 
     async def set_queue_state(self):
         await self.set_local_state("queue_length", self.get_queue_length())
 
     async def set_features(self):
         await self.set_local_state("features", [])
+    
+    async def set_speed(self):
+        await self.set_local_state("speed", 1.0)
 
     def release_model_semaphore(self):
         self.model_semaphore.release()
@@ -176,47 +182,38 @@ class ClusterWorker(ClusterNode):
     def push_task_result(self, task_id: str, response: BaseWorkerResult):
         self.output_queue[task_id].put(response, block=True, timeout=WORKER_API_TIMEOUT)
 
-    async def get_worker_address(self, model_name: str, feature_tag: str) -> Optional[str]:
-        if self.dispatch_method == DispatchMethod.LOTTERY:
-            worker_ids = []
-            worker_speeds = []
-            for w_id, w_info in self.neighborhoods.items():
-                w_model_name = await self.get_node_state(w_info.node_id, "model_name")
-                w_features = await self.get_node_state(w_info.node_id, "features")
-                w_speed = await self.get_node_state(w_info.node_id, "speed")
-                if model_name == w_model_name and feature_tag in w_features:
-                    worker_ids.append(w_id)
-                    worker_speeds.append(w_speed)
-            worker_speeds = np.array(worker_speeds, dtype=np.float32)
-            norm = np.sum(worker_speeds)
-            if norm < 1e-4:
-                return ""
-            worker_speeds = worker_speeds / norm
-            pt = np.random.choice(np.arange(len(worker_ids)), p=worker_speeds)
-            node_id = worker_ids[pt]
-            return self.neighborhoods[node_id].node_addr
-
-        elif self.dispatch_method == DispatchMethod.SHORTEST_QUEUE:
-            worker_ids = []
-            worker_qlen = []
-            for w_id, w_info in self.neighborhoods.items():
-                w_model_name = await self.get_node_state(w_info.node_id, "model_name")
-                w_features = await self.get_node_state(w_info.node_id, "features")
-                w_speed = await self.get_node_state(w_info.node_id, "speed")
-                w_queue_length = await self.get_node_state(w_info.node_id, "queue_length")
-                if model_name == w_model_name and feature_tag in w_features:
-                    worker_ids.append(w_id)
-                    worker_qlen.append(w_queue_length / w_speed)
-            if len(worker_ids) == 0:
-                return ""
-            min_index = np.argmin(worker_qlen)
-            w_id = worker_ids[min_index]
-            return self.neighborhoods[w_id].node_addr
-        else:
-            raise ValueError(f"Invalid dispatch method: {self.dispatch_method}")
-
     async def api_get_worker_address(self, request: WorkerAddressRequest) -> WorkerAddressResponse:
-        node_address = await self.get_worker_address(request.model_name, request.feature)
+        address_list, values = await self.get_worker_address(request.condition, request.expression)
         return WorkerAddressResponse(
-            node_address=node_address
+            address_list=address_list,
+            values=values,
         )
+    
+    async def get_worker_address(self, condition: str, expression: str) -> Optional[str]:
+        condition_variables = re.findall(r'\{(.*?)\}', condition)
+        expression_variables = re.findall(r'\{(.*?)\}', expression)
+
+        worker_ids = []
+        worker_values = []
+        for w_id, w_info in self.neighborhoods.items():
+            # filter by expression
+            final_condition = condition
+            final_condition_variables = {}
+            for v_name in condition_variables:
+                variable_value = await self.get_node_state(w_info.node_id, v_name)
+                final_condition = final_condition.replace("{" + v_name + "}", v_name)
+                final_condition_variables[v_name] = variable_value
+            
+            final_expression = expression
+            final_expression_variables = {}
+            for v_name in expression_variables:
+                variable_value = await self.get_node_state(w_info.node_id, v_name)
+                final_expression = final_expression.replace("{" + v_name + "}", v_name)
+                final_expression_variables[v_name] = variable_value
+
+            if safe_eval(final_condition, final_condition_variables):
+                worker_ids.append(w_id)
+                worker_values.append(safe_eval(final_expression, final_expression_variables))
+        
+        return worker_ids, worker_values
+                

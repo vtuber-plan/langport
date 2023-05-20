@@ -40,8 +40,8 @@ from langport.constants import (
     ErrorCode,
 )
 from langport.utils.interval_timer import IntervalTimer
-from cachetools import cached, LRUCache, TTLCache
-
+from cachetools import LRUCache, TTLCache
+from asyncache import cached
 
 class ClusterNode(BaseNode):
     def __init__(
@@ -270,8 +270,8 @@ class ClusterNode(BaseNode):
         return ret
     
     async def get_node_state(self, node_id: str, name: str) -> Any:
-        node_addr = self.neighborhoods[node_id]
-        response = await self.request_node_state(node_addr, name)
+        node_info = self.neighborhoods[node_id]
+        response = await self.request_node_state(node_info.node_addr, name)
         self.remote_states[node_id][name] = json.loads(response.state_value)
         return self.remote_states[node_id][name]
     

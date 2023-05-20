@@ -61,11 +61,12 @@ class NodeInfoResponse(BaseModel):
     node_info: NodeInfo
 
 class WorkerAddressRequest(BaseModel):
-    model_name: str
-    feature: str
+    condition: str
+    expression: str
 
 class WorkerAddressResponse(BaseModel):
-    node_address: Optional[str]
+    address_list: List[str]
+    values: List[float]
 
 
 class BaseWorkerTask(BaseModel):

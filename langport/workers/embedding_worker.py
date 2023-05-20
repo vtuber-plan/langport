@@ -21,7 +21,6 @@ from langport.protocol.worker_protocol import (
     EmbeddingWorkerResult,
     EmbeddingsTask,
     UsageInfo,
-    WorkerStatus,
 )
 
 import torch
@@ -104,6 +103,7 @@ class EmbeddingModelWorker(ClusterWorker):
         node_addr: str,
         node_id: str,
         init_neighborhoods_addr: List[str],
+        dispatch_method: str,
         executor: BaseModelExecutor,
         limit_model_concurrency: int,
         max_batch: int,
@@ -114,6 +114,7 @@ class EmbeddingModelWorker(ClusterWorker):
             node_addr=node_addr,
             node_id=node_id,
             init_neighborhoods_addr=init_neighborhoods_addr,
+            dispatch_method=dispatch_method,
             limit_model_concurrency=limit_model_concurrency,
             max_batch=max_batch,
             stream_interval=stream_interval,
@@ -131,9 +132,13 @@ class EmbeddingModelWorker(ClusterWorker):
         )
         
         self.on_start("set_features", self.set_features)
+        self.on_start("set_model_name", self.set_model_name)
 
     async def set_features(self):
         await self.set_local_state("features", ["embedding"])
+    
+    async def set_model_name(self):
+        await self.set_local_state("model_name", self.executor.model_name)
 
     def get_embeddings(self, task: EmbeddingsTask):
         self.add_task(task)
