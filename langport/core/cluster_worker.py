@@ -117,6 +117,7 @@ class ClusterWorker(ClusterNode):
     async def add_task(self, task: BaseWorkerTask):
         self.task_queue.put(task, block=True, timeout=WORKER_API_TIMEOUT)
         self.output_queue[task.task_id] = queue.Queue()
+        await self.set_queue_state()
 
     async def fetch_task_result(self, task_id: str):
         result_queue = self.output_queue[task_id]

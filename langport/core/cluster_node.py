@@ -112,7 +112,11 @@ class ClusterNode(BaseNode):
     
     async def get_all_init_neighborhoods(self):
         for neighbor_addr in self.init_neighborhoods_addr:
-            info = await self.get_node_info(neighbor_addr)
+            try:
+                info = await self.get_node_info(neighbor_addr)
+            except httpx.ReadTimeout:
+                self.logger.error(f"Cannot connect to neighbor {neighbor_addr}.")
+                continue
             self._add_node(info.node_id, info.node_addr, info.check_heart_beat)
         # add self
         self._add_node(self.node_id, self.node_addr, True)

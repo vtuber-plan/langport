@@ -307,34 +307,16 @@ class HuggingfaceGenerationExecutor(GenerationExecutor):
         batch_size = len(tasks)
         if batch_size == 0:
             return
-        
-        # sort task
-        sorted_result = sorted(zip(tasks, [len(t.prompt) for t in tasks]), key=lambda x: x[1])
-        sorted_tasks = [x[0] for x in sorted_result]
-        sorted_lengths = [x[1] for x in sorted_result]
-
-        # subbatch split
-        SUBBATCH_THRESHOLD = 512
-        subbatch = []
-        new_tasks = []
-        for i in range(batch_size):
-            if i != 0 and sorted_lengths[i] - sorted_lengths[i-1] > SUBBATCH_THRESHOLD:
-                subbatch.append(new_tasks)
-                new_tasks = []
-            else:
-                new_tasks.append(sorted_tasks[i])
-        subbatch.append(new_tasks)
 
         # batch inference
-        for subtasks in subbatch:
-            for chunk in batch_generation(
-                self.model,
-                self.tokenizer,
-                self.device,
-                worker.stream_interval,
-                subtasks,
-            ):
-                worker.push_task_result(chunk.task_id, chunk)
+        for chunk in batch_generation(
+            self.model,
+            self.tokenizer,
+            self.device,
+            worker.stream_interval,
+            tasks,
+        ):
+            worker.push_task_result(chunk.task_id, chunk)
 
         for task in tasks:
             worker.push_task_result(
