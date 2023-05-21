@@ -9,7 +9,7 @@ def start_session(i: int):
     openai.api_key = "EMPTY" # Not support yet
     openai.api_base = "http://localhost:8000/v1"
 
-    model = "7b-bf16"
+    model = "fastchat-t5-3b-v1.0"
     # create a chat completion
     completion = openai.ChatCompletion.create(
       model=model,
@@ -26,7 +26,7 @@ if __name__ == "__main__":
   start_time = time.time()
 
   test_num = 100
-  results = Parallel(n_jobs=64)(delayed(start_session)(i) for i in tqdm.tqdm(range(test_num), total=test_num))
+  results = Parallel(n_jobs=32)(delayed(start_session)(i) for i in tqdm.tqdm(range(test_num), total=test_num))
 
   end_time = time.time()
   print(f"Successed samples: {sum(results)}")

@@ -59,7 +59,7 @@ class ClusterNode(BaseNode):
         self.init_neighborhoods_addr: List[str] = init_neighborhoods_addr
         self.neighborhoods: Dict[str, NodeInfo] = {}
         self.headers = {"User-Agent": "LangPort nodes"}
-        self.states: List[str, Any] = {}
+        self.states: Dict[str, Any] = {}
         self.remote_states: Dict[str, Dict[str, Any]] = defaultdict(dict)
 
         # timers
@@ -270,6 +270,8 @@ class ClusterNode(BaseNode):
         return ret
     
     async def get_node_state(self, node_id: str, name: str) -> Any:
+        if node_id == self.node_id:
+            return self.states.get(name, None)
         node_info = self.neighborhoods[node_id]
         response = await self.request_node_state(node_info.node_addr, name)
         self.remote_states[node_id][name] = json.loads(response.state_value)

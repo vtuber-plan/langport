@@ -22,6 +22,7 @@ from langport.protocol.worker_protocol import (
     EmbeddingsTask,
     UsageInfo,
 )
+import traceback
 
 import torch
 
@@ -41,13 +42,14 @@ def inference_embeddings(worker: "EmbeddingModelWorker"):
     batch_size = len(tasks)
     if batch_size == 0:
         return
-    print(batch_size)
+    # print(batch_size)
 
     prompts = [task.input for task in tasks]
     try:
         tokenizer = worker.executor.tokenizer
         model = worker.executor.model
-        input_ids = tokenizer.encode(prompts, return_tensors="pt").to(worker.executor.device)
+        encoded_prompts = tokenizer(prompts, return_tensors="pt", padding="longest")
+        input_ids = encoded_prompts.input_ids.to(worker.executor.device)
         if model.config.is_encoder_decoder:
             decoder_input_ids = torch.full(
                 (batch_size, 1),
@@ -88,6 +90,7 @@ def inference_embeddings(worker: "EmbeddingModelWorker"):
                 )
             )
     except Exception as e:
+        traceback.print_exc()
         for i in range(batch_size):
             worker.push_task_result(
                 tasks[i].task_id,
@@ -149,9 +152,9 @@ class EmbeddingModelWorker(ClusterWorker):
     async def set_model_name(self):
         await self.set_local_state("model_name", self.executor.model_name)
 
-    def get_embeddings(self, task: EmbeddingsTask):
-        self.add_task(task)
+    async def get_embeddings(self, task: EmbeddingsTask):
+        await self.add_task(task)
         result = None
-        for chunk in self.fetch_task_result(task.task_id):
+        async for chunk in self.fetch_task_result(task.task_id):
             result = chunk
         return result

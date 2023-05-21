@@ -26,7 +26,7 @@ if __name__ == "__main__":
   start_time = time.time()
 
   test_num = 100
-  results = Parallel(n_jobs=16)(delayed(start_session)(i) for i in tqdm.tqdm(range(test_num), total=test_num))
+  results = Parallel(n_jobs=32)(delayed(start_session)(i) for i in tqdm.tqdm(range(test_num), total=test_num))
 
   end_time = time.time()
   print(f"Successed samples: {sum(results)}")

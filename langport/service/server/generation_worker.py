@@ -10,8 +10,9 @@ import uuid
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 import requests
+from langport.model.executor.huggingface import LanguageModelExecutor
 
-from langport.core.generation_worker import GenerationModelWorker
+from langport.workers.generation_worker import GenerationModelWorker
 
 import uvicorn
 
@@ -28,9 +29,8 @@ if __name__ == "__main__":
     parser.add_argument("--host", type=str, default="localhost")
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--worker-address", type=str, default=None)
-    parser.add_argument(
-        "--controller-address", type=str, default="http://localhost:21001"
-    )
+    parser.add_argument("--neighbors", type=str, nargs="*", default=[])
+
     add_model_args(parser)
     parser.add_argument("--model-name", type=str, help="Optional display name")
     parser.add_argument("--limit-model-concurrency", type=int, default=16)
@@ -39,8 +39,8 @@ if __name__ == "__main__":
     parser.add_argument("--no-register", action="store_true")
     args = parser.parse_args()
 
-    worker_id = str(uuid.uuid4())
-    logger = build_logger("model_worker", f"model_worker_{worker_id}.log")
+    node_id = str(uuid.uuid4())
+    logger = build_logger("model_worker", f"model_worker_{node_id}.log")
     logger.info(f"args: {args}")
 
     if args.gpus:
@@ -58,12 +58,8 @@ if __name__ == "__main__":
     
     if args.model_name is None:
         args.model_name = os.path.basename(os.path.normpath(args.model_path))
-
-    app.worker = GenerationModelWorker(
-        controller_addr=args.controller_address,
-        worker_addr=args.worker_address,
-        worker_id=worker_id,
-        worker_type="generation",
+    
+    executor = LanguageModelExecutor(
         model_path=args.model_path,
         model_name=args.model_name,
         device=args.device,
@@ -71,6 +67,13 @@ if __name__ == "__main__":
         max_gpu_memory=args.max_gpu_memory,
         load_8bit=args.load_8bit,
         cpu_offloading=args.cpu_offloading,
+    )
+
+    app.node = GenerationModelWorker(
+        node_addr=args.worker_address,
+        node_id=node_id,
+        init_neighborhoods_addr=args.neighbors,
+        executor=executor,
         limit_model_concurrency=args.limit_model_concurrency,
         max_batch=args.batch,
         stream_interval=args.stream_interval,

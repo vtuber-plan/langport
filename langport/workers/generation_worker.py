@@ -14,10 +14,14 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 import requests
 from tenacity import retry, stop_after_attempt
+from langport.core.cluster_worker import ClusterWorker
 from langport.model.executor.base import BaseModelExecutor
 
 from langport.protocol.worker_protocol import (
     BaseWorkerResult,
+    GenerationTask,
+    GenerationWorkerResult,
+    UsageInfo,
 )
 
 import torch
@@ -37,7 +41,6 @@ from langport.constants import (
     WORKER_HEART_BEAT_INTERVAL,
     ErrorCode,
 )
-from langport.model.model_adapter import load_model
 from langport.utils import server_error_msg, pretty_print_semaphore
 
 
@@ -86,6 +89,7 @@ def batch_generation(
     batch_size = len(tasks)
     if batch_size == 0:
         return
+    print(batch_size)
 
     prompts = [task.prompt for task in tasks]
     max_new_tokens = max([task.max_new_tokens for task in tasks])
@@ -259,7 +263,7 @@ def batch_generation(
     del past_key_values
 
 
-def inference_generation(worker: "ModelWorker", deadline_tick: bool):
+def inference_generation(worker: "GenerationModelWorker", deadline_tick: bool):
     if not worker.online:
         return
     
@@ -272,9 +276,9 @@ def inference_generation(worker: "ModelWorker", deadline_tick: bool):
         return
 
     for chunk in batch_generation(
-        worker.model_holder.model,
-        worker.model_holder.tokenizer,
-        worker.device,
+        worker.executor.model,
+        worker.executor.tokenizer,
+        worker.executor.device,
         worker.stream_interval,
         tasks,
     ):
@@ -286,30 +290,28 @@ def inference_generation(worker: "ModelWorker", deadline_tick: bool):
         )
 
 
-class GenerationModelWorker(ModelWorker):
+class GenerationModelWorker(ClusterWorker):
     def __init__(
         self,
-        controller_addr: str,
-        worker_addr: str,
-        worker_id: str,
-        worker_type: str,
+        node_addr: str,
+        node_id: str,
+        init_neighborhoods_addr: List[str],
         executor: BaseModelExecutor,
         limit_model_concurrency: int,
         max_batch: int,
         stream_interval: int,
-        logger,
+        logger
     ):
         super(GenerationModelWorker, self).__init__(
-            controller_addr=controller_addr,
-            worker_addr=worker_addr,
-            worker_id=worker_id,
-            worker_type=worker_type,
-            executor=executor,
+            node_addr=node_addr,
+            node_id=node_id,
+            init_neighborhoods_addr=init_neighborhoods_addr,
             limit_model_concurrency=limit_model_concurrency,
             max_batch=max_batch,
             stream_interval=stream_interval,
             logger=logger,
         )
+        self.executor = executor
         workers = max(1, 2 * self.limit_model_concurrency // self.max_batch)
         self.add_timer(
             "generation_inference",
@@ -328,12 +330,22 @@ class GenerationModelWorker(ModelWorker):
             kwargs=None,
             workers=workers,
         )
+    
+        self.on_start("set_features", self.set_features)
+        self.on_start("set_model_name", self.set_model_name)
 
-    def generation_stream(self, task: GenerationTask):
-        self.add_task(task)
-        for chunk in self.fetch_task_result(task.task_id):
+    async def set_features(self):
+        await self.set_local_state("features", ["generation"])
+    
+    async def set_model_name(self):
+        await self.set_local_state("model_name", self.executor.model_name)
+
+
+    async def generation_stream(self, task: GenerationTask):
+        await self.add_task(task)
+        async for chunk in self.fetch_task_result(task.task_id):
             yield chunk
 
-    def generation_bytes_stream(self, task: GenerationTask):
-        for chunk in self.generation_stream(task):
+    async def generation_bytes_stream(self, task: GenerationTask):
+        async for chunk in self.generation_stream(task):
             yield json.dumps(chunk.dict()).encode() + b"\0"

@@ -114,18 +114,18 @@ class ClusterWorker(ClusterNode):
                 + len(self.model_semaphore._waiters)
             )
 
-    def add_task(self, task: BaseWorkerTask):
+    async def add_task(self, task: BaseWorkerTask):
         self.task_queue.put(task, block=True, timeout=WORKER_API_TIMEOUT)
         self.output_queue[task.task_id] = queue.Queue()
 
-    def fetch_task_result(self, task_id: str):
+    async def fetch_task_result(self, task_id: str):
         result_queue = self.output_queue[task_id]
         retry_counter = 0
         while True:
             try:
                 event = result_queue.get(block=False, timeout=None)
             except queue.Empty:
-                time.sleep(0.01)
+                await asyncio.sleep(0.01)
                 retry_counter += 1
                 # If client disconnected, stop to wait queue.
                 if retry_counter > 2000:

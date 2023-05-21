@@ -8,8 +8,8 @@ from .core_node import app, create_background_tasks
 @app.post("/chat_stream")
 async def api_chat_stream(request: Request):
     params = await request.json()
-    await app.worker.acquire_model_semaphore()
-    generator = app.worker.generation_bytes_stream(GenerationTask(
+    await app.node.acquire_model_semaphore()
+    generator = app.node.generation_bytes_stream(GenerationTask(
         prompt=params["prompt"],
         temperature=params.get("temperature", 1.0),
         repetition_penalty=params.get("repetition_penalty", 0.0),
@@ -20,14 +20,14 @@ async def api_chat_stream(request: Request):
         echo=params.get("echo", False),
         stop_token_ids=params.get("stop_token_ids", None),
     ))
-    background_tasks = create_background_tasks(app.worker)
+    background_tasks = create_background_tasks(app.node)
     return StreamingResponse(generator, background=background_tasks)
 
 @app.post("/chat")
 async def api_chat(request: Request):
     params = await request.json()
-    await app.worker.acquire_model_semaphore()
-    generator = app.worker.generation_stream(GenerationTask(
+    await app.node.acquire_model_semaphore()
+    generator = await app.node.generation_stream(GenerationTask(
         prompt=params["prompt"],
         temperature=params.get("temperature", 1.0),
         repetition_penalty=params.get("repetition_penalty", 0.0),
@@ -41,7 +41,7 @@ async def api_chat(request: Request):
     completion = None
     for chunk in generator:
         completion = chunk
-    background_tasks = create_background_tasks(app.worker)
+    background_tasks = create_background_tasks(app.node)
     return JSONResponse(content=completion.dict(), background=background_tasks)
 
 
@@ -49,8 +49,8 @@ async def api_chat(request: Request):
 @app.post("/completion_stream")
 async def api_completion_stream(request: Request):
     params = await request.json()
-    await app.worker.acquire_model_semaphore()
-    generator = app.worker.generation_bytes_stream(GenerationTask(
+    await app.node.acquire_model_semaphore()
+    generator = app.node.generation_bytes_stream(GenerationTask(
         prompt=params["prompt"],
         temperature=params.get("temperature", 1.0),
         repetition_penalty=params.get("repetition_penalty", 0.0),
@@ -61,15 +61,15 @@ async def api_completion_stream(request: Request):
         echo=params.get("echo", False),
         stop_token_ids=params.get("stop_token_ids", None),
     ))
-    background_tasks = create_background_tasks(app.worker)
+    background_tasks = create_background_tasks(app.node)
     return StreamingResponse(generator, background=background_tasks)
 
 
 @app.post("/completion")
 async def api_completion(request: Request):
     params = await request.json()
-    await app.worker.acquire_model_semaphore()
-    generator = app.worker.generation_stream(GenerationTask(
+    await app.node.acquire_model_semaphore()
+    generator = await app.node.generation_stream(GenerationTask(
         prompt=params["prompt"],
         temperature=params.get("temperature", 1.0),
         repetition_penalty=params.get("repetition_penalty", 0.0),
@@ -83,5 +83,5 @@ async def api_completion(request: Request):
     completion = None
     for chunk in generator:
         completion = chunk
-    background_tasks = create_background_tasks(app.worker)
+    background_tasks = create_background_tasks(app.node)
     return JSONResponse(content=completion.dict(), background=background_tasks)
