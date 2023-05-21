@@ -41,18 +41,29 @@ def inference_embeddings(worker: "EmbeddingModelWorker"):
     batch_size = len(tasks)
     if batch_size == 0:
         return
-    
+    print(batch_size)
+
     prompts = [task.input for task in tasks]
     try:
-        tokenizer = worker.model_holder.tokenizer
-        model = worker.model_holder.model
-        input_ids = tokenizer.encode(prompts, return_tensors="pt").to(worker.device)
-        model_output = model(input_ids, output_hidden_states=True)
-        is_chatglm = "chatglm" in str(type(model)).lower()
-        if is_chatglm:
-            data = model_output.hidden_states[-1].transpose(0, 1)
+        tokenizer = worker.executor.tokenizer
+        model = worker.executor.model
+        input_ids = tokenizer.encode(prompts, return_tensors="pt").to(worker.executor.device)
+        if model.config.is_encoder_decoder:
+            decoder_input_ids = torch.full(
+                (batch_size, 1),
+                model.generation_config.decoder_start_token_id,
+                dtype=torch.long,
+                device=worker.executor.device,
+            )
+            model_output = model(input_ids, decoder_input_ids=decoder_input_ids, output_hidden_states=True)
+            data = model_output.decoder_hidden_states[-1]
         else:
-            data = model_output.hidden_states[-1]
+            model_output = model(input_ids, output_hidden_states=True)
+            is_chatglm = "chatglm" in str(type(model)).lower()
+            if is_chatglm:
+                data = model_output.hidden_states[-1].transpose(0, 1)
+            else:
+                data = model_output.hidden_states[-1]
         embeddings = torch.mean(data, dim=1)
         for i in range(batch_size):
             token_num = len(tokenizer(prompts[i]).input_ids)
@@ -103,7 +114,6 @@ class EmbeddingModelWorker(ClusterWorker):
         node_addr: str,
         node_id: str,
         init_neighborhoods_addr: List[str],
-        dispatch_method: str,
         executor: BaseModelExecutor,
         limit_model_concurrency: int,
         max_batch: int,
@@ -114,7 +124,6 @@ class EmbeddingModelWorker(ClusterWorker):
             node_addr=node_addr,
             node_id=node_id,
             init_neighborhoods_addr=init_neighborhoods_addr,
-            dispatch_method=dispatch_method,
             limit_model_concurrency=limit_model_concurrency,
             max_batch=max_batch,
             stream_interval=stream_interval,

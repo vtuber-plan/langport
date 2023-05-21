@@ -19,13 +19,13 @@ from .embedding_node import app
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default="localhost")
-    parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--port", type=int, default=21005)
     parser.add_argument("--worker-address", type=str, default=None)
     parser.add_argument("--neighbors", type=str, nargs="*", default=[])
     
     add_model_args(parser)
     parser.add_argument("--model-name", type=str, help="Optional display name")
-    parser.add_argument("--limit-model-concurrency", type=int, default=5)
+    parser.add_argument("--limit-model-concurrency", type=int, default=8)
     parser.add_argument("--batch", type=int, default=4)
     parser.add_argument("--stream-interval", type=int, default=2)
     parser.add_argument("--no-register", action="store_true")
@@ -71,7 +71,6 @@ if __name__ == "__main__":
         node_addr=args.worker_address,
         node_id=node_id,
         init_neighborhoods_addr=args.neighbors,
-        dispatch_method=args.dispatch_method,
         executor=executor,
         limit_model_concurrency=args.limit_model_concurrency,
         max_batch=args.batch,

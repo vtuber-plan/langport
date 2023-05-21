@@ -14,7 +14,6 @@ import queue
 import uuid
 
 
-from enum import Enum, auto
 import httpx
 import numpy as np
 import requests
@@ -49,28 +48,12 @@ from langport.constants import (
 from langport.utils.evaluation import safe_eval
 from langport.utils.interval_timer import IntervalTimer
 
-
-class DispatchMethod(Enum):
-    LOTTERY = auto()
-    SHORTEST_QUEUE = auto()
-
-    @classmethod
-    def from_str(cls, name):
-        if name == "lottery":
-            return cls.LOTTERY
-        elif name == "shortest_queue":
-            return cls.SHORTEST_QUEUE
-        else:
-            raise ValueError(f"Invalid dispatch method")
-
-
 class ClusterWorker(ClusterNode):
     def __init__(
         self,
         node_addr: str,
         node_id: str,
         init_neighborhoods_addr: List[str],
-        dispatch_method: str,
         limit_model_concurrency: int,
         max_batch: int,
         stream_interval: int,
@@ -86,7 +69,6 @@ class ClusterWorker(ClusterNode):
         self.limit_model_concurrency = limit_model_concurrency
         self.max_batch = max_batch
         self.stream_interval = stream_interval
-        self.dispatch_method = DispatchMethod.from_str(dispatch_method)
 
         self.global_counter = 0
         self.model_semaphore = None
@@ -183,8 +165,9 @@ class ClusterWorker(ClusterNode):
         self.output_queue[task_id].put(response, block=True, timeout=WORKER_API_TIMEOUT)
 
     async def api_get_worker_address(self, request: WorkerAddressRequest) -> WorkerAddressResponse:
-        address_list, values = await self.get_worker_address(request.condition, request.expression)
+        id_list, address_list, values = await self.get_worker_address(request.condition, request.expression)
         return WorkerAddressResponse(
+            id_list=id_list,
             address_list=address_list,
             values=values,
         )
@@ -194,6 +177,7 @@ class ClusterWorker(ClusterNode):
         expression_variables = re.findall(r'\{(.*?)\}', expression)
 
         worker_ids = []
+        worker_address = []
         worker_values = []
         for w_id, w_info in self.neighborhoods.items():
             final_condition = condition
@@ -212,8 +196,9 @@ class ClusterWorker(ClusterNode):
 
             if safe_eval(final_condition, final_condition_variables):
                 worker_ids.append(w_id)
+                worker_address.append(w_info.node_addr)
                 value_json = json.dumps(safe_eval(final_expression, final_expression_variables))
                 worker_values.append(value_json)
         
-        return worker_ids, worker_values
+        return worker_ids, worker_address, worker_values
                 

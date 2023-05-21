@@ -252,7 +252,7 @@ class ClusterNode(BaseNode):
                 self.logger.info(f"Node {node_id} is expired.")
                 self._remove_node(node_id)
     
-    @cached(cache=TTLCache(maxsize=1024, ttl=8))
+    @cached(cache=TTLCache(maxsize=1024, ttl=16))
     async def request_node_state(self, node_addr: str, name: str) -> GetNodeStateResponse:
         data = GetNodeStateRequest(
             state_name=name,

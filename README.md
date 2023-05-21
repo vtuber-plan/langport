@@ -41,18 +41,17 @@ pip install -e .
 
 It is simple to start a local chat API service:
 ``` bash
-python -m langport.service.controller
-python -m langport.service.generation_worker --model-path <your model path>
-python -m langport.service.openai_api
+python -m langport.service.server.dummy_worker
+python -m langport.service.server.generation_worker --model-path <your model path> --neighbors=http://localhost:21001
+python -m langport.service.gateway.openai_api
 ```
 
 If you need the embeddings API or other features:
 ``` bash
-python -m langport.service.controller
-python -m langport.service.generation_worker --model-path <your model path>
-python -m langport.service.embedding_worker --model-path <your model path>
-python -m langport.service.openai_api
-python -m langport.service.fauxpilot_api
+python -m langport.service.server.generation_worker --model-path <your model path>
+python -m langport.service.server.embedding_worker --model-path <your model path>
+python -m langport.service.gateway.openai_api
+python -m langport.service.gateway.fauxpilot_api
 ```
 
 ## License

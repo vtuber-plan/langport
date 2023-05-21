@@ -65,6 +65,7 @@ class WorkerAddressRequest(BaseModel):
     expression: str
 
 class WorkerAddressResponse(BaseModel):
+    id_list: List[str]
     address_list: List[str]
     values: List[str]
 

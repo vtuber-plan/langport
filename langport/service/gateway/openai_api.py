@@ -49,6 +49,7 @@ from langport.protocol.worker_protocol import (
     WorkerAddressRequest,
     WorkerAddressResponse,
 )
+from langport.core.dispatch import DispatchMethod
 
 logger = logging.getLogger(__name__)
 
@@ -75,16 +76,12 @@ async def validation_exception_handler(request, exc):
     return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
 
 
-async def check_model(request, request_type: str) -> Optional[JSONResponse]:
+async def check_model(request, feature: str) -> Optional[JSONResponse]:
     controller_address = app_settings.controller_address
     ret = None
     async with httpx.AsyncClient() as client:
-        try:
-            _worker_addr = await _get_worker_address(
-                request.model, request_type, client
-            )
-        except:
-            models = await _list_models(request_type, client)
+        models = await _list_models(feature, client)
+        if len(models) == 0:
             ret = create_error_response(
                 ErrorCode.INVALID_MODEL,
                 f"Only {'&&'.join(models)} allowed now, your model {request.model}",
@@ -94,7 +91,7 @@ async def check_model(request, request_type: str) -> Optional[JSONResponse]:
 
 async def check_length(request, request_type: str, prompt, max_tokens):
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(request.model, request_type, client)
+        worker_addr = await _get_worker_address(request.model, request_type, client, DispatchMethod.LOTTERY)
 
         response = await client.post(
             worker_addr + "/model_details",
@@ -231,9 +228,9 @@ def get_gen_params(
     return gen_params
 
 
-@retry(stop=stop_after_attempt(5))
+# @retry(stop=stop_after_attempt(5))
 async def _get_worker_address(
-    model_name: str, feature: str, client: httpx.AsyncClient, dispatch: str
+    model_name: str, feature: str, client: httpx.AsyncClient, dispatch: Union[str, DispatchMethod]
 ) -> str:
     """
     Get worker address based on the requested model
@@ -245,12 +242,13 @@ async def _get_worker_address(
     :raises: :class:`ValueError`: No available worker for requested model
     """
     controller_address = app_settings.controller_address
-
-    if dispatch == "lottery":
+    if isinstance(dispatch, str):
+        dispatch = DispatchMethod.from_str(dispatch)
+    if dispatch == DispatchMethod.LOTTERY:
         payload = WorkerAddressRequest(
             condition=f"{{model_name}}=='{model_name}' and '{feature}' in {{features}}", expression="-{speed}"
         )
-    elif dispatch == "shortest_queue":
+    elif dispatch == DispatchMethod.SHORTEST_QUEUE:
         payload = WorkerAddressRequest(
             condition=f"{{model_name}}=='{model_name}' and '{feature}' in {{features}}", expression="{queue_length}/{speed}"
         )
@@ -278,7 +276,7 @@ async def _get_worker_address(
     return worker_addr
 
 
-@retry(stop=stop_after_attempt(5))
+# @retry(stop=stop_after_attempt(5))
 async def _list_models(feature: str, client: httpx.AsyncClient) -> str:
     controller_address = app_settings.controller_address
 
@@ -295,7 +293,7 @@ async def _list_models(feature: str, client: httpx.AsyncClient) -> str:
     models = [json.loads(obj) for obj in response.values]
     # No available worker
     if address_list == []:
-        raise ValueError(f"No available worker for {model_name} and {feature}")
+        raise ValueError(f"No available worker for feature {feature}")
 
     return models
 
@@ -519,7 +517,7 @@ async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
 async def generate_completion_stream(url: str, payload: Dict[str, Any]) -> Generator[GenerationWorkerResult, Any, None]:
     controller_address = app_settings.controller_address
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(payload["model"], "generation", client)
+        worker_addr = await _get_worker_address(payload["model"], "generation", client, DispatchMethod.LOTTERY)
 
         delimiter = b"\0"
         try:
@@ -563,6 +561,8 @@ async def create_embeddings(request: EmbeddingsRequest):
     }
 
     response = await get_embedding(payload)
+    if response.type == "error":
+        return create_error_response(ErrorCode.INTERNAL_ERROR, response.message)
     return EmbeddingsResponse(
         data=[EmbeddingsData(embedding=response.embedding, index=0)],
         model=request.model,
@@ -578,7 +578,7 @@ async def get_embedding(payload: Dict[str, Any]) -> EmbeddingWorkerResult:
     controller_address = app_settings.controller_address
     model_name = payload["model"]
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(model_name, "embedding", client)
+        worker_addr = await _get_worker_address(model_name, "embedding", client, DispatchMethod.LOTTERY)
 
         response = await client.post(
             worker_addr + "/embeddings",
@@ -586,6 +586,9 @@ async def get_embedding(payload: Dict[str, Any]) -> EmbeddingWorkerResult:
             json=payload,
             timeout=WORKER_API_TIMEOUT,
         )
+        if response.json()["type"] == "error":
+            error_message = BaseWorkerResult.parse_obj(response.json())
+            return error_message
         return EmbeddingWorkerResult.parse_obj(response.json())
 
 
@@ -624,7 +627,7 @@ if __name__ == "__main__":
     logger.debug(f"==== args ====\n{args}")
 
     uvicorn.run(
-        "langport.service.openai_api:app",
+        "langport.service.gateway.openai_api:app",
         host=args.host,
         port=args.port,
         log_level="info",
