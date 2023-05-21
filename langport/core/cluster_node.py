@@ -40,6 +40,7 @@ from langport.constants import (
     ErrorCode,
 )
 from langport.utils.cache_state import CacheState
+from langport.utils.http_pool import AsyncHttpPool
 from langport.utils.interval_timer import IntervalTimer
 from cachetools import LRUCache, TTLCache
 from asyncache import cached
@@ -62,6 +63,8 @@ class ClusterNode(BaseNode):
         self.headers = {"User-Agent": "LangPort nodes"}
         self.states: Dict[str, CacheState] = {}
         self.remote_states: Dict[str, Dict[str, CacheState]] = defaultdict(dict)
+
+        self.client = AsyncHttpPool()
 
         # timers
         self.add_timer(
@@ -115,13 +118,12 @@ class ClusterNode(BaseNode):
         self._add_node(self.node_id, self.node_addr, True)
     
     async def get_node_info(self, node_addr: str) -> NodeInfo:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                node_addr + "/node_info",
-                headers=self.headers,
-                json=NodeInfoRequest(node_id=self.node_id).dict(),
-                timeout=WORKER_API_TIMEOUT,
-            )
+        response = await self.client.post(
+            node_addr + "/node_info",
+            headers=self.headers,
+            json=NodeInfoRequest(node_id=self.node_id).dict(),
+            timeout=WORKER_API_TIMEOUT,
+        )
         remote_node_info = NodeInfoResponse.parse_obj(response.json())
         return remote_node_info.node_info
 
@@ -138,14 +140,13 @@ class ClusterNode(BaseNode):
                 check_heart_beat=True,
             )
         
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    target_node_addr + "/register_node",
-                    headers=self.headers,
-                    json=data.dict(),
-                    timeout=WORKER_API_TIMEOUT,
-                )
-                remote = RegisterNodeResponse.parse_obj(response.json())
+            response = await self.client.post(
+                target_node_addr + "/register_node",
+                headers=self.headers,
+                json=data.dict(),
+                timeout=WORKER_API_TIMEOUT,
+            )
+            remote = RegisterNodeResponse.parse_obj(response.json())
             self._add_node(remote.node_id, remote.node_addr)
             
             # fetch remote node info
@@ -176,14 +177,13 @@ class ClusterNode(BaseNode):
             node_id=removed_node_id,
         )
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                target_node_addr + "/remove_node",
-                headers=self.headers,
-                json=data.dict(),
-                timeout=WORKER_API_TIMEOUT,
-            )
-            ret = RemoveNodeResponse.parse_obj(response.json())
+        response = await self.client.post(
+            target_node_addr + "/remove_node",
+            headers=self.headers,
+            json=data.dict(),
+            timeout=WORKER_API_TIMEOUT,
+        )
+        ret = RemoveNodeResponse.parse_obj(response.json())
 
         return True
 
@@ -203,14 +203,13 @@ class ClusterNode(BaseNode):
             node_id=self.node_id,
         )
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                node_addr + "/heartbeat",
-                headers=self.headers,
-                json=data.dict(),
-                timeout=WORKER_API_TIMEOUT,
-            )
-            ret = HeartbeatPong.parse_obj(response.json())
+        response = await self.client.post(
+            node_addr + "/heartbeat",
+            headers=self.headers,
+            json=data.dict(),
+            timeout=WORKER_API_TIMEOUT,
+        )
+        ret = HeartbeatPong.parse_obj(response.json())
   
         return ret
 
@@ -233,14 +232,13 @@ class ClusterNode(BaseNode):
             node_id=self.node_id,
         )
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                node_addr + "/node_list",
-                headers=self.headers,
-                json=data.dict(),
-                timeout=WORKER_API_TIMEOUT,
-            )
-            ret = NodeListResponse.parse_obj(response.json())
+        response = await self.client.post(
+            node_addr + "/node_list",
+            headers=self.headers,
+            json=data.dict(),
+            timeout=WORKER_API_TIMEOUT,
+        )
+        ret = NodeListResponse.parse_obj(response.json())
   
         return ret
 
@@ -259,15 +257,14 @@ class ClusterNode(BaseNode):
             state_name=name,
         )
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                node_addr + "/get_node_state",
-                headers=self.headers,
-                json=data.dict(),
-                timeout=WORKER_API_TIMEOUT,
-            )
-            ret = GetNodeStateResponse.parse_obj(response.json())
-  
+        response = await self.client.post(
+            node_addr + "/get_node_state",
+            headers=self.headers,
+            json=data.dict(),
+            timeout=WORKER_API_TIMEOUT,
+        )
+        ret = GetNodeStateResponse.parse_obj(response.json())
+
         return ret
     
     async def get_node_state(self, node_id: str, name: str) -> Any:
@@ -288,7 +285,7 @@ class ClusterNode(BaseNode):
         ttl = response.state_ttl
         if value is not None:
             target_state[name] = CacheState(value, ttl)
-        return target_state[name]
+        return target_state[name].get()
         
     
     async def set_local_state(self, name: str, value: Any, ttl: int=60):

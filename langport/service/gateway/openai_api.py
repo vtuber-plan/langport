@@ -6,12 +6,14 @@ import json
 import logging
 
 import os
+import random
 from typing import Generator, Optional, Union, Dict, List, Any
 
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 import httpx
+import numpy as np
 import shortuuid
 from tenacity import retry, stop_after_attempt
 import uvicorn
@@ -246,7 +248,7 @@ async def _get_worker_address(
         dispatch = DispatchMethod.from_str(dispatch)
     if dispatch == DispatchMethod.LOTTERY:
         payload = WorkerAddressRequest(
-            condition=f"{{model_name}}=='{model_name}' and '{feature}' in {{features}}", expression="-{speed}"
+            condition=f"{{model_name}}=='{model_name}' and '{feature}' in {{features}}", expression="1 / 0.01 + {speed}"
         )
     elif dispatch == DispatchMethod.SHORTEST_QUEUE:
         payload = WorkerAddressRequest(
@@ -270,8 +272,18 @@ async def _get_worker_address(
     # No available worker
     if address_list == []:
         raise ValueError(f"No available worker for {model_name} and {feature}")
-
-    worker_addr = address_list[0]
+    if dispatch == DispatchMethod.LOTTERY:
+        node_speeds = np.array(values, dtype=np.float32)
+        norm = np.sum(node_speeds)
+        if norm < 1e-4:
+            return ""
+        node_speeds = node_speeds / norm
+        pt = np.random.choice(np.arange(len(address_list)), p=node_speeds)
+        worker_addr = address_list[pt]
+    elif dispatch == DispatchMethod.SHORTEST_QUEUE:
+        worker_addr = address_list[0]
+    else:
+        raise Exception("Error dispatch method.")
     logger.debug(f"model_name: {model_name}, feature: {feature}, worker_addr: {worker_addr}")
     return worker_addr
 
@@ -348,6 +360,8 @@ async def create_chat_completion(request: ChatCompletionRequest):
     usage = UsageInfo()
     for i, content_task in enumerate(chat_completions):
         content = await content_task
+        if content is None:
+            return create_error_response(ErrorCode.INTERNAL_ERROR, "Server internal error")
         if content.error_code != ErrorCode.OK:
             return create_error_response(content.error_code, content.message)
         choices.append(

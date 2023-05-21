@@ -46,6 +46,10 @@ from langport.constants import (
 from langport.utils import server_error_msg, pretty_print_semaphore
 from langport.workers.generation_worker import GenerationModelWorker
 
+from cachetools import LRUCache, TTLCache
+from asyncache import cached
+
+@cached(LRUCache(maxsize=64))
 def prepare_logits_processor(
     temperature: float, repetition_penalty: float, top_p: float, top_k: int
 ) -> LogitsProcessorList:
@@ -91,7 +95,8 @@ def batch_generation(
     batch_size = len(tasks)
     if batch_size == 0:
         return
-
+    
+    # collect params
     prompts = [task.prompt for task in tasks]
     max_new_tokens = max([task.max_new_tokens for task in tasks])
 
@@ -124,9 +129,14 @@ def batch_generation(
         full_input_ids[i, : length[i]] = inputs[i]
 
     # needed variables
-    input_ids = full_input_ids[:, : min(length)]
+    input_ids = full_input_ids[:, : min(length)].clone()
     if model.config.is_encoder_decoder:
-        encoder_outputs = model.encoder(input_ids=full_input_ids)
+        max_len = max(length)
+        attention_mask = torch.ones(len(max_len), max_len, dtype=torch.long, device=device)
+        for i, each_length in enumerate(length):
+            attention_mask[i, each_length:] = 0
+
+        encoder_outputs = model.encoder(input_ids=full_input_ids, attention_mask=attention_mask)
         decoder_input_ids = torch.full(
             (batch_size, 1),
             model.generation_config.decoder_start_token_id,
@@ -144,11 +154,10 @@ def batch_generation(
     # step by step
     for step in range(max_new_tokens):
         if model.config.is_encoder_decoder:
-            out = model(
-                input_ids=input_ids,
+            out = model.decoder(
+                input_ids=decoder_input_ids,
                 use_cache=True,
                 encoder_outputs=encoder_outputs,
-                decoder_input_ids=decoder_input_ids,
                 past_key_values=past_key_values,
             )
         else:
@@ -163,12 +172,11 @@ def batch_generation(
         new_ids = []
         current_len = input_ids.shape[1]
 
-        for i in range(batch_size):
+        for i, task in enumerate(tasks):
             if is_stop[i]:
                 new_ids.append(pad_fill_id)
                 continue
-            task = tasks[i]
-            last_token_logits = logits[i][-1]
+            each_logits = logits[i, -1, :].unsqueeze(0)
 
             logits_processor = logits_processor_list[i]
             if logits_processor:
@@ -176,9 +184,9 @@ def batch_generation(
                     tmp_output_ids = input_ids[i, :].unsqueeze(0)
                 else:
                     tmp_output_ids = None
-                last_token_logits = logits_processor(tmp_output_ids, logits[:, -1, :])[0]
+                last_token_logits = logits_processor(tmp_output_ids, each_logits)[0]
             else:
-                last_token_logits = logits[0, -1, :]
+                last_token_logits = each_logits
 
             if device == "mps":
                 # Switch to CPU by avoiding some bugs in mps backend.
@@ -213,8 +221,7 @@ def batch_generation(
 
         decoder_input_ids = new_ids_tensor
 
-        for i in range(batch_size):
-            task = tasks[i]
+        for i, task in enumerate(tasks):
             if step % stream_interval == 0 or is_stop[i]:
                 if tasks[i].echo:
                     tmp_output_ids = input_ids[i, :]
@@ -300,15 +307,34 @@ class HuggingfaceGenerationExecutor(GenerationExecutor):
         batch_size = len(tasks)
         if batch_size == 0:
             return
+        
+        # sort task
+        sorted_result = sorted(zip(tasks, [len(t.prompt) for t in tasks]), key=lambda x: x[1])
+        sorted_tasks = [x[0] for x in sorted_result]
+        sorted_lengths = [x[1] for x in sorted_result]
 
-        for chunk in batch_generation(
-            self.model,
-            self.tokenizer,
-            self.device,
-            worker.stream_interval,
-            tasks,
-        ):
-            worker.push_task_result(chunk.task_id, chunk)
+        # subbatch split
+        SUBBATCH_THRESHOLD = 512
+        subbatch = []
+        new_tasks = []
+        for i in range(batch_size):
+            if i != 0 and sorted_lengths[i] - sorted_lengths[i-1] > SUBBATCH_THRESHOLD:
+                subbatch.append(new_tasks)
+                new_tasks = []
+            else:
+                new_tasks.append(sorted_tasks[i])
+        subbatch.append(new_tasks)
+
+        # batch inference
+        for subtasks in subbatch:
+            for chunk in batch_generation(
+                self.model,
+                self.tokenizer,
+                self.device,
+                worker.stream_interval,
+                subtasks,
+            ):
+                worker.push_task_result(chunk.task_id, chunk)
 
         for task in tasks:
             worker.push_task_result(

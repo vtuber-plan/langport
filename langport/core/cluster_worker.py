@@ -153,7 +153,7 @@ class ClusterWorker(ClusterNode):
 
     def fetch_tasks(self) -> List[BaseWorkerResult]:
         task_batch = []
-        while len(task_batch) <= self.max_batch:
+        while len(task_batch) < self.max_batch:
             try:
                 task = self.task_queue.get(block=False, timeout=None)
             except queue.Empty:

@@ -23,7 +23,7 @@ from langport.utils import build_logger
 from .generation_node import app
 
 
-# We suggest that concurrency == batch * thread
+# We suggest that concurrency == batch * thread (thread == 4)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default="localhost")
@@ -33,8 +33,8 @@ if __name__ == "__main__":
 
     add_model_args(parser)
     parser.add_argument("--model-name", type=str, help="Optional display name")
-    parser.add_argument("--limit-model-concurrency", type=int, default=16)
-    parser.add_argument("--batch", type=int, default=8)
+    parser.add_argument("--limit-model-concurrency", type=int, default=8)
+    parser.add_argument("--batch", type=int, default=4)
     parser.add_argument("--stream-interval", type=int, default=2)
     parser.add_argument("--no-register", action="store_true")
     args = parser.parse_args()

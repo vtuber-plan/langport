@@ -18,7 +18,7 @@ def safe_eval(expr, variables=None):
         'Load', 'Lt', 'LtE', 'Mod', 'Name', 'Not', 'NotEq', 'NotIn',
         'Num', 'Or', 'RShift', 'Set', 'Slice', 'Str', 'Sub',
         'Tuple', 'UAdd', 'USub', 'UnaryOp', 'boolop', 'cmpop',
-        'expr', 'expr_context', 'operator', 'slice', 'unaryop', 'Constant']
+        'expr', 'expr_context', 'operator', 'slice', 'unaryop', 'Constant', 'Div']
     node = ast.parse(expr, mode='eval')
     for subnode in ast.walk(node):
         subnode_name = type(subnode).__name__

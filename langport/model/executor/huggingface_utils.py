@@ -5,8 +5,10 @@ import warnings
 import psutil
 
 import torch
+from langport.model.compression import load_compress_model
 from langport.model.executor.base import BaseModelExecutor
 from langport.model.model_adapter import get_model_adapter, raise_warning_for_incompatible_cpu_offloading_configuration
+from langport.model.monkey_patch_non_inplace import replace_llama_attn_with_non_inplace_operations
 from langport.utils import get_gpu_memory
 
 
