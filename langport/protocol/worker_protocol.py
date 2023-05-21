@@ -53,6 +53,7 @@ class GetNodeStateRequest(BaseModel):
 
 class GetNodeStateResponse(BaseModel):
     state_value: str
+    state_ttl: int = 60
 
 class NodeInfoRequest(BaseModel):
     node_id: str

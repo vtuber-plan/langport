@@ -83,13 +83,13 @@ class ClusterWorker(ClusterNode):
         self.on_start("set_speed", self.set_speed)
 
     async def set_queue_state(self):
-        await self.set_local_state("queue_length", self.get_queue_length())
+        await self.set_local_state("queue_length", self.get_queue_length(), ttl=16)
 
     async def set_features(self):
-        await self.set_local_state("features", [])
+        await self.set_local_state("features", [], ttl=360)
     
     async def set_speed(self):
-        await self.set_local_state("speed", 1.0)
+        await self.set_local_state("speed", 1.0, ttl=360)
 
     def release_model_semaphore(self):
         self.model_semaphore.release()

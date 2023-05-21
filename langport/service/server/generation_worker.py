@@ -10,7 +10,7 @@ import uuid
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 import requests
-from langport.model.executor.huggingface import LanguageModelExecutor
+from langport.model.executor.generation.huggingface import HuggingfaceGenerationExecutor
 
 from langport.workers.generation_worker import GenerationModelWorker
 
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     if args.model_name is None:
         args.model_name = os.path.basename(os.path.normpath(args.model_path))
     
-    executor = LanguageModelExecutor(
+    executor = HuggingfaceGenerationExecutor(
         model_path=args.model_path,
         model_name=args.model_name,
         device=args.device,

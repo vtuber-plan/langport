@@ -7,7 +7,7 @@ import logging
 import json
 import os
 import time
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Union
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 import threading
 import queue
 import uuid
@@ -39,6 +39,7 @@ from langport.constants import (
     WORKER_HEART_BEAT_INTERVAL,
     ErrorCode,
 )
+from langport.utils.cache_state import CacheState
 from langport.utils.interval_timer import IntervalTimer
 from cachetools import LRUCache, TTLCache
 from asyncache import cached
@@ -59,8 +60,8 @@ class ClusterNode(BaseNode):
         self.init_neighborhoods_addr: List[str] = init_neighborhoods_addr
         self.neighborhoods: Dict[str, NodeInfo] = {}
         self.headers = {"User-Agent": "LangPort nodes"}
-        self.states: Dict[str, Any] = {}
-        self.remote_states: Dict[str, Dict[str, Any]] = defaultdict(dict)
+        self.states: Dict[str, CacheState] = {}
+        self.remote_states: Dict[str, Dict[str, CacheState]] = defaultdict(dict)
 
         # timers
         self.add_timer(
@@ -251,8 +252,8 @@ class ClusterNode(BaseNode):
             if time.time() - node_info.refresh_time > HEART_BEAT_EXPIRATION:
                 self.logger.info(f"Node {node_id} is expired.")
                 self._remove_node(node_id)
-    
-    @cached(cache=TTLCache(maxsize=1024, ttl=16))
+
+    @cached(TTLCache(maxsize=1024, ttl=16))
     async def request_node_state(self, node_addr: str, name: str) -> GetNodeStateResponse:
         data = GetNodeStateRequest(
             state_name=name,
@@ -271,14 +272,27 @@ class ClusterNode(BaseNode):
     
     async def get_node_state(self, node_id: str, name: str) -> Any:
         if node_id == self.node_id:
-            return self.states.get(name, None)
+            entry = self.states.get(name, None)
+            if entry is not None:
+                return entry.get()
+            else:
+                return None
         node_info = self.neighborhoods[node_id]
+        target_state = self.remote_states[node_id]
+        if name in target_state:
+            if target_state[name].is_valid():
+                return target_state[name].get()
+
         response = await self.request_node_state(node_info.node_addr, name)
-        self.remote_states[node_id][name] = json.loads(response.state_value)
-        return self.remote_states[node_id][name]
+        value = json.loads(response.state_value)
+        ttl = response.state_ttl
+        if value is not None:
+            target_state[name] = CacheState(value, ttl)
+        return target_state[name]
+        
     
-    async def set_local_state(self, name: str, value: Any):
-        self.states[name] = value
+    async def set_local_state(self, name: str, value: Any, ttl: int=60):
+        self.states[name] = CacheState(value, ttl)
 
     async def api_register_node(self, request: RegisterNodeRequest) -> RegisterNodeResponse:
         if request.node_id not in self.neighborhoods:
@@ -325,8 +339,10 @@ class ClusterNode(BaseNode):
     
     async def api_return_node_state(self, request: GetNodeStateRequest) -> GetNodeStateResponse:
         if request.state_name in self.states:
+            entry = self.states[request.state_name]
             return GetNodeStateResponse(
-                state_value=json.dumps(self.states[request.state_name])
+                state_value=json.dumps(entry.value),
+                state_ttl=entry.ttl
             )
         else:
             return GetNodeStateResponse(

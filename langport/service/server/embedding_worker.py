@@ -6,11 +6,12 @@ import time
 from typing import List, Union
 import threading
 import uuid
+from langport.model.executor.embedding.huggingface import HuggingfaceEmbeddingExecutor
 
 from langport.workers.embedding_worker import EmbeddingModelWorker
 
 import uvicorn
-from langport.model.executor.huggingface import LanguageModelExecutor
+from langport.model.executor.huggingface_utils import LanguageModelExecutor
 from langport.model.model_adapter import add_model_args
 from langport.utils import build_logger
 
@@ -19,7 +20,7 @@ from .embedding_node import app
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default="localhost")
-    parser.add_argument("--port", type=int, default=21005)
+    parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--worker-address", type=str, default=None)
     parser.add_argument("--neighbors", type=str, nargs="*", default=[])
     
@@ -57,7 +58,7 @@ if __name__ == "__main__":
     if args.model_name is None:
         args.model_name = os.path.basename(os.path.normpath(args.model_path))
 
-    executor = LanguageModelExecutor(
+    executor = HuggingfaceEmbeddingExecutor(
         model_path=args.model_path,
         model_name=args.model_name,
         device=args.device,
