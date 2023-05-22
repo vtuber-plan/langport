@@ -214,7 +214,7 @@ def get_gen_params(
         "prompt": prompt,
         "temperature": temperature,
         "top_p": top_p,
-        "max_new_tokens": max_tokens,
+        "max_tokens": max_tokens,
         "echo": echo,
         "stream": stream,
     }

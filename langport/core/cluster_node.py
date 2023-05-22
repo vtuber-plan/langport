@@ -61,11 +61,12 @@ class ClusterNode(BaseNode):
         self.init_neighborhoods_addr: List[str] = init_neighborhoods_addr
         self.neighborhoods: Dict[str, NodeInfo] = {}
         self.headers = {"User-Agent": "LangPort nodes"}
+
         self.states: Dict[str, CacheState] = {}
         self.remote_states: Dict[str, Dict[str, CacheState]] = defaultdict(dict)
 
         self.client = AsyncHttpPool()
-
+        
         # timers
         self.add_timer(
             "heartbeat",
@@ -278,19 +279,21 @@ class ClusterNode(BaseNode):
                 return entry.get()
             else:
                 return None
-        node_info = self.neighborhoods[node_id]
-        target_state = self.remote_states[node_id]
-        if name in target_state:
-            if target_state[name].is_valid():
-                return target_state[name].get()
-
-        response = await self.request_node_state(node_info.node_addr, name)
-        value = json.loads(response.state_value)
-        ttl = response.state_ttl
-        if value is not None:
-            target_state[name] = CacheState(value, ttl)
-        return target_state[name].get()
         
+        state_lock = asyncio.Lock()
+        async with state_lock:
+            target_state = self.remote_states[node_id]
+            if name in target_state:
+                if target_state[name].is_valid():
+                    return target_state[name].get()
+
+            node_info = self.neighborhoods[node_id]
+            response = await self.request_node_state(node_info.node_addr, name)
+            value = json.loads(response.state_value)
+            ttl = response.state_ttl
+            if value is not None:
+                self.remote_states[node_id][name] = CacheState(value, ttl)
+            return self.remote_states[node_id][name].get()
     
     async def set_local_state(self, name: str, value: Any, ttl: int=60):
         self.states[name] = CacheState(value, ttl)

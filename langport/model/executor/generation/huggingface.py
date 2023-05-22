@@ -98,7 +98,7 @@ def batch_generation(
     
     # collect params
     prompts = [task.prompt for task in tasks]
-    max_new_tokens = max([task.max_new_tokens for task in tasks])
+    max_tokens = max([task.max_tokens for task in tasks])
 
     # init logits_processor
     logits_processor_list = []
@@ -151,6 +151,7 @@ def batch_generation(
     # decode state
     is_stop = [False] * batch_size
 
+    max_new_tokens = max_tokens - min(length)
     # step by step
     for step in range(max_new_tokens):
         if model.config.is_encoder_decoder:
@@ -207,7 +208,10 @@ def batch_generation(
             if task.stop_token_ids is not None and new_token in task.stop_token_ids:
                 is_stop[i] = True
 
-            if new_token == tokenizer.eos_token_id or step == max_new_tokens - 1:
+            if new_token == tokenizer.eos_token_id:
+                is_stop[i] = True
+
+            if current_len == task.max_tokens - 1:
                 is_stop[i] = True
 
         new_ids_tensor = torch.tensor(
@@ -251,7 +255,7 @@ def batch_generation(
                 )
 
             if is_stop[i]:
-                if step == max_new_tokens - 1:
+                if current_len == task.max_tokens - 1:
                     finish_reason = "length"
                 else:
                     finish_reason = "stop"

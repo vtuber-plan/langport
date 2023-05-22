@@ -29,7 +29,6 @@ if __name__ == "__main__":
     parser.add_argument("--limit-model-concurrency", type=int, default=8)
     parser.add_argument("--batch", type=int, default=4)
     parser.add_argument("--stream-interval", type=int, default=2)
-    parser.add_argument("--no-register", action="store_true")
     parser.add_argument(
         "--dispatch-method",
         type=str,
@@ -39,7 +38,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     node_id = str(uuid.uuid4())
-    logger = build_logger("model_worker", f"model_worker_{node_id}.log")
+    logger = build_logger("embedding_worker", f"embedding_worker_{node_id}.log")
     logger.info(f"args: {args}")
 
     if args.gpus:
