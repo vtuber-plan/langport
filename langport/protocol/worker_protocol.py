@@ -7,38 +7,68 @@ from pydantic import BaseModel, Field
 
 from langport.constants import ErrorCode
 
+class NodeInfo(BaseModel):
+    node_id: str
+    node_addr: str
+    check_heart_beat: bool
+    refresh_time: int = Field(default_factory=lambda: int(time.time()))
 
-class WorkerStatus(BaseModel):
-    worker_id: str
-    model_name: str
-    speed: int = 1
-    queue_length: int
 
-class WorkerHeartbeatPing(BaseModel):
-    worker_id: str
-
-class WorkerHeartbeatPong(BaseModel):
-    exist: bool
-
-class RegisterWorkerRequest(BaseModel):
-    worker_id: str
-    worker_addr: str
-    worker_type: str
+class RegisterNodeRequest(BaseModel):
+    node_id: str
+    node_addr: str
     check_heart_beat: bool
 
-class RemoveWorkerRequest(BaseModel):
-    worker_id: str
+class RegisterNodeResponse(BaseModel):
+    node_id: str
+    node_addr: str
+    check_heart_beat: bool
 
+class RemoveNodeRequest(BaseModel):
+    node_id: str
+
+class RemoveNodeResponse(BaseModel):
+    node_id: str
+
+class HeartbeatPing(BaseModel):
+    node_id: str
+
+class HeartbeatPong(BaseModel):
+    exist: bool
+
+class NodeListRequest(BaseModel):
+    node_id: str
+
+class NodeListResponse(BaseModel):
+    nodes: List[NodeInfo]
+
+class ListNodeStatesRequest(BaseModel):
+    pass
+
+class ListNodeStatesResponse(BaseModel):
+    states: List[str]
+
+class GetNodeStateRequest(BaseModel):
+    state_name: str
+
+class GetNodeStateResponse(BaseModel):
+    state_value: str
+    state_ttl: int = 60
+
+class NodeInfoRequest(BaseModel):
+    node_id: str
+
+class NodeInfoResponse(BaseModel):
+    node_info: NodeInfo
 
 class WorkerAddressRequest(BaseModel):
-    model_name: str
-    worker_type: str
+    condition: str
+    expression: str
 
 class WorkerAddressResponse(BaseModel):
-    address: str
-
-class ListModelsResponse(BaseModel):
-    models: List[str]
+    id_list: List[str]
+    address_list: List[str]
+    values: List[str]
 
 
 class BaseWorkerTask(BaseModel):
@@ -55,7 +85,7 @@ class GenerationTask(BaseWorkerTask):
     repetition_penalty: Optional[float] = 0.0
     top_p: Optional[float] = 1.0
     top_k: Optional[int] = 1
-    max_new_tokens: Optional[int] = None
+    max_tokens: Optional[int] = None
     stop: Optional[Union[List[str], str]] = None
     echo: Optional[bool] = False
     stop_token_ids: Optional[List[int]] = None

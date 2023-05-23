@@ -8,3 +8,6 @@ shortuuid==1.0.11
 tenacity==8.2.2
 transformers==4.28.1
 uvicorn==0.22.0
+torch==2.0.1+cu118
+cachetools==5.3.0
+asyncache==0.3.1

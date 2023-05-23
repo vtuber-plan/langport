@@ -6,66 +6,39 @@ import time
 from typing import List, Union
 import threading
 import uuid
+from langport.model.executor.embedding.huggingface import HuggingfaceEmbeddingExecutor
 
-from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import StreamingResponse, JSONResponse
-from langport.core.embedding_worker import EmbeddingModelWorker
+from langport.workers.embedding_worker import EmbeddingModelWorker
 
 import uvicorn
-
+from langport.model.executor.huggingface_utils import LanguageModelExecutor
 from langport.model.model_adapter import add_model_args
-from langport.protocol.worker_protocol import EmbeddingsTask
 from langport.utils import build_logger
 
-app = FastAPI()
-
-
-def create_background_tasks(worker):
-    background_tasks = BackgroundTasks()
-    background_tasks.add_task(lambda: worker.release_model_semaphore())
-    return background_tasks
-
-@app.post("/embeddings")
-async def api_embeddings(request: EmbeddingsTask):
-    await app.worker.acquire_model_semaphore()
-    embedding = app.worker.get_embeddings(request)
-    background_tasks = create_background_tasks(app.worker)
-    return JSONResponse(content=embedding.dict(), background=background_tasks)
-
-
-@app.post("/get_worker_status")
-async def api_get_status(request: Request):
-    return app.worker.get_status()
-
-
-@app.on_event("startup")
-async def startup_event():
-    app.worker.start()
-
-
-@app.on_event("shutdown")
-def shutdown_event():
-    app.worker.stop()
-
+from .embedding_node import app
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default="localhost")
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--worker-address", type=str, default=None)
-    parser.add_argument(
-        "--controller-address", type=str, default="http://localhost:21001"
-    )
+    parser.add_argument("--neighbors", type=str, nargs="*", default=[])
+    
     add_model_args(parser)
     parser.add_argument("--model-name", type=str, help="Optional display name")
-    parser.add_argument("--limit-model-concurrency", type=int, default=5)
+    parser.add_argument("--limit-model-concurrency", type=int, default=8)
     parser.add_argument("--batch", type=int, default=4)
     parser.add_argument("--stream-interval", type=int, default=2)
-    parser.add_argument("--no-register", action="store_true")
+    parser.add_argument(
+        "--dispatch-method",
+        type=str,
+        choices=["lottery", "shortest_queue"],
+        default="shortest_queue",
+    )
     args = parser.parse_args()
 
-    worker_id = str(uuid.uuid4())
-    logger = build_logger("model_worker", f"model_worker_{worker_id}.log")
+    node_id = str(uuid.uuid4())
+    logger = build_logger("embedding_worker", f"embedding_worker_{node_id}.log")
     logger.info(f"args: {args}")
 
     if args.gpus:
@@ -84,11 +57,7 @@ if __name__ == "__main__":
     if args.model_name is None:
         args.model_name = os.path.basename(os.path.normpath(args.model_path))
 
-    app.worker = EmbeddingModelWorker(
-        controller_addr=args.controller_address,
-        worker_addr=args.worker_address,
-        worker_id=worker_id,
-        worker_type="embedding",
+    executor = HuggingfaceEmbeddingExecutor(
         model_path=args.model_path,
         model_name=args.model_name,
         device=args.device,
@@ -96,6 +65,13 @@ if __name__ == "__main__":
         max_gpu_memory=args.max_gpu_memory,
         load_8bit=args.load_8bit,
         cpu_offloading=args.cpu_offloading,
+    )
+
+    app.node = EmbeddingModelWorker(
+        node_addr=args.worker_address,
+        node_id=node_id,
+        init_neighborhoods_addr=args.neighbors,
+        executor=executor,
         limit_model_concurrency=args.limit_model_concurrency,
         max_batch=args.batch,
         stream_interval=args.stream_interval,
