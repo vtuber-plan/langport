@@ -99,11 +99,11 @@ async def validation_exception_handler(request, exc):
     return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
 
 
-async def check_model(request, feature: str) -> Optional[JSONResponse]:
+async def check_model(request, feature: str, model_name: str) -> Optional[JSONResponse]:
     ret = None
     async with httpx.AsyncClient() as client:
         models = await _list_models(feature, client)
-        if len(models) == 0:
+        if len(models) == 0 or model_name not in models:
             ret = create_error_response(
                 ErrorCode.INVALID_MODEL,
                 f"Only {'&&'.join(models)} allowed now, your model {request.model}",
@@ -349,7 +349,7 @@ async def show_available_models():
 @app.post("/v1/chat/completions")
 async def create_chat_completion(request: ChatCompletionRequest):
     """Creates a completion for the chat message"""
-    error_check_ret = await check_model(request, "generation")
+    error_check_ret = await check_model(request, "generation", request.model)
     if error_check_ret is not None:
         return error_check_ret
     error_check_ret = check_requests(request)
@@ -462,7 +462,7 @@ async def chat_completion(
 
 @app.post("/v1/completions")
 async def create_completion(request: CompletionRequest):
-    error_check_ret = await check_model(request, "generation")
+    error_check_ret = await check_model(request, "generation", request.model)
     if error_check_ret is not None:
         return error_check_ret
     error_check_ret = check_requests(request)
@@ -551,7 +551,15 @@ async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
 
 async def generate_completion_stream(url: str, payload: Dict[str, Any]) -> Generator[GenerationWorkerResult, Any, None]:
     async with httpx.AsyncClient() as client:
-        worker_addr = await _get_worker_address(payload["model"], "generation", client, DispatchMethod.LOTTERY)
+        try:
+            worker_addr = await _get_worker_address(payload["model"], "generation", client, DispatchMethod.LOTTERY)
+        except:
+            yield BaseWorkerResult(
+                type="error",
+                message=f"No available worker running {payload['model']} for generation",
+                error_code=ErrorCode.INVALID_MODEL
+            )
+            return
 
         delimiter = b"\0"
         try:
@@ -589,7 +597,7 @@ async def generate_completion(payload: Dict[str, Any]) -> Optional[GenerationWor
 @app.post("/v1/embeddings")
 async def create_embeddings(request: EmbeddingsRequest):
     """Creates embeddings for the text"""
-    error_check_ret = await check_model(request, "embedding")
+    error_check_ret = await check_model(request, "embedding", request.model)
     if error_check_ret is not None:
         return error_check_ret
     payload = {
