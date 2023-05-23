@@ -16,7 +16,7 @@ from langport.workers.generation_worker import GenerationModelWorker
 
 import uvicorn
 
-from langport.model.model_adapter import add_model_args
+from langport.model.model_args import add_model_args
 from langport.protocol.worker_protocol import GenerationTask
 from langport.utils import build_logger
 

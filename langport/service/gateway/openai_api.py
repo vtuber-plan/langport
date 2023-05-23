@@ -7,6 +7,7 @@ import logging
 
 import os
 import random
+import traceback
 from typing import Generator, Optional, Union, Dict, List, Any
 
 import fastapi
@@ -69,7 +70,7 @@ app = fastapi.FastAPI(debug=True)
 headers = {"User-Agent": "Langport API Server"}
 
 class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: ASGIApp, sk:str, dispatch: DispatchFunction | None = None) -> None:
+    def __init__(self, app: ASGIApp, sk:str, dispatch: Optional[DispatchFunction] = None) -> None:
         super().__init__(app, dispatch)
         self.sk = sk
 
@@ -99,7 +100,6 @@ async def validation_exception_handler(request, exc):
 
 
 async def check_model(request, feature: str) -> Optional[JSONResponse]:
-    controller_address = app_settings.controller_address
     ret = None
     async with httpx.AsyncClient() as client:
         models = await _list_models(feature, client)
@@ -309,11 +309,15 @@ async def _get_worker_address(
 
 
 # @retry(stop=stop_after_attempt(5))
-async def _list_models(feature: str, client: httpx.AsyncClient) -> str:
+async def _list_models(feature: Optional[str], client: httpx.AsyncClient) -> str:
     controller_address = app_settings.controller_address
 
+    if feature is None:
+        condition = "True"
+    else:
+        condition=f"'{feature}' in {{features}}"
     payload = WorkerAddressRequest(
-        condition=f"'{feature}' in {{features}}", expression="{model_name}"
+        condition=condition, expression="{model_name}"
     )
 
     ret = await client.post(
@@ -332,11 +336,8 @@ async def _list_models(feature: str, client: httpx.AsyncClient) -> str:
 
 @app.get("/v1/models")
 async def show_available_models():
-    controller_address = app_settings.controller_address
     async with httpx.AsyncClient() as client:
-        ret = await client.post(controller_address + "/refresh_all_workers")
-        ret = await client.post(controller_address + "/list_models")
-    models = ret.json()["models"]
+        models = await _list_models(None, client)
     models.sort()
     # TODO: return real model permission details
     model_cards = []
@@ -549,7 +550,6 @@ async def generate_completion_stream_generator(payload: Dict[str, Any], n: int):
 
 
 async def generate_completion_stream(url: str, payload: Dict[str, Any]) -> Generator[GenerationWorkerResult, Any, None]:
-    controller_address = app_settings.controller_address
     async with httpx.AsyncClient() as client:
         worker_addr = await _get_worker_address(payload["model"], "generation", client, DispatchMethod.LOTTERY)
 
@@ -567,6 +567,9 @@ async def generate_completion_stream(url: str, payload: Dict[str, Any]) -> Gener
                         if not chunk:
                             continue
                         data = json.loads(chunk.decode())
+                        if data["type"] == "error":
+                            yield BaseWorkerResult.parse_obj(data)
+                            break
                         yield GenerationWorkerResult.parse_obj(data)
         except httpx.ReadTimeout:
             yield BaseWorkerResult(

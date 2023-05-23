@@ -98,7 +98,7 @@ def batch_generation(
     
     # collect params
     prompts = [task.prompt for task in tasks]
-    max_tokens = max([task.max_tokens for task in tasks])
+    max_tokens = [task.max_tokens for task in tasks]
 
     # init logits_processor
     logits_processor_list = []
@@ -151,7 +151,7 @@ def batch_generation(
     # decode state
     is_stop = [False] * batch_size
 
-    max_new_tokens = max_tokens - min(length)
+    max_new_tokens = max([length[i] + max_tokens[i] for i in range(batch_size)]) - min(length)
     # step by step
     for step in range(max_new_tokens):
         if model.config.is_encoder_decoder:
@@ -211,7 +211,7 @@ def batch_generation(
             if new_token == tokenizer.eos_token_id:
                 is_stop[i] = True
 
-            if current_len == task.max_tokens - 1:
+            if current_len == length[i] + task.max_tokens - 1:
                 is_stop[i] = True
 
         new_ids_tensor = torch.tensor(
@@ -255,7 +255,7 @@ def batch_generation(
                 )
 
             if is_stop[i]:
-                if current_len == task.max_tokens - 1:
+                if current_len == length[i] + task.max_tokens - 1:
                     finish_reason = "length"
                 else:
                     finish_reason = "stop"
@@ -302,6 +302,21 @@ class HuggingfaceGenerationExecutor(GenerationExecutor):
         self.adapter, self.model, self.tokenizer = load_model(
             model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading
         )
+
+        if hasattr(self.model.config, "max_sequence_length"):
+            self._context_len = self.model.config.max_sequence_length
+        elif hasattr(self.model.config, "max_position_embeddings"):
+            self._context_len = self.model.config.max_position_embeddings
+        else:
+            self._context_len = 2048
+
+    @property
+    def context_length(self) -> int:
+        return self._context_len
+    
+    def tokenize(self, text: str) -> List[int]:
+        input_ids = self.tokenizer(text).input_ids
+        return input_ids
     
     def inference(self, worker: "GenerationModelWorker"):
         if not worker.online:

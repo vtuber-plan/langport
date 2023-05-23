@@ -11,8 +11,7 @@ from langport.model.executor.embedding.huggingface import HuggingfaceEmbeddingEx
 from langport.workers.embedding_worker import EmbeddingModelWorker
 
 import uvicorn
-from langport.model.executor.huggingface_utils import LanguageModelExecutor
-from langport.model.model_adapter import add_model_args
+from langport.model.model_args import add_model_args
 from langport.utils import build_logger
 
 from .embedding_node import app

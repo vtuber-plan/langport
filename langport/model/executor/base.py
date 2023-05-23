@@ -1,5 +1,5 @@
 
-from typing import Optional
+from typing import List, Optional
 
 
 class BaseModelExecutor(object):
@@ -21,3 +21,9 @@ class BaseModelExecutor(object):
         self.load_8bit = load_8bit
         self.cpu_offloading = cpu_offloading
 
+    @property
+    def context_length(self) -> int:
+        return 2048
+
+    def tokenize(self, text: str) -> List[int]:
+        raise NotImplementedError("executor tokenizer method is not implemented.")

@@ -3,7 +3,7 @@
 
 
 import traceback
-from typing import Optional
+from typing import List, Optional
 
 import torch
 from langport.model.executor.embedding import EmbeddingExecutor
@@ -38,6 +38,21 @@ class HuggingfaceEmbeddingExecutor(EmbeddingExecutor):
         self.adapter, self.model, self.tokenizer = load_model(
             model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading
         )
+
+        if hasattr(self.model.config, "max_sequence_length"):
+            self._context_len = self.model.config.max_sequence_length
+        elif hasattr(self.model.config, "max_position_embeddings"):
+            self._context_len = self.model.config.max_position_embeddings
+        else:
+            self._context_len = 2048
+    
+    @property
+    def context_length(self) -> int:
+        return self._context_len
+
+    def tokenize(self, text: str) -> List[int]:
+        input_ids = self.tokenizer(text).input_ids
+        return input_ids
     
     def inference(self, worker: "EmbeddingModelWorker"):
         if not worker.online:

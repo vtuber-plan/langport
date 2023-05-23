@@ -77,6 +77,18 @@ class EmbeddingModelWorker(ClusterWorker):
         await self.set_local_state("model_name", self.executor.model_name, ttl=360)
 
     async def get_embeddings(self, task: EmbeddingsTask):
+        input_tokens = len(self.executor.tokenize(task.input))
+        context_length = self.executor.context_length
+
+        if input_tokens > context_length:
+            yield BaseWorkerResult(task_id=task.task_id,
+                                   type="error",
+                                   message=f"This model's maximum context length is {context_length} tokens. "
+                                    f"However, you requested {input_tokens} tokens. "
+                                    f"Please reduce the length of the messages or completion.",
+                                    error_code=ErrorCode.CONTEXT_OVERFLOW
+                                   )
+            return
         await self.add_task(task)
         result = None
         async for chunk in self.fetch_task_result(task.task_id):
