@@ -81,14 +81,14 @@ class EmbeddingModelWorker(ClusterWorker):
         context_length = self.executor.context_length
 
         if input_tokens > context_length:
-            yield BaseWorkerResult(task_id=task.task_id,
+            return BaseWorkerResult(task_id=task.task_id,
                                    type="error",
                                    message=f"This model's maximum context length is {context_length} tokens. "
                                     f"However, you requested {input_tokens} tokens. "
                                     f"Please reduce the length of the messages or completion.",
                                     error_code=ErrorCode.CONTEXT_OVERFLOW
                                    )
-            return
+
         await self.add_task(task)
         result = None
         async for chunk in self.fetch_task_result(task.task_id):
