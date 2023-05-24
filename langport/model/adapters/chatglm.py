@@ -1,17 +1,8 @@
-from typing import List, Optional
-import warnings
-from functools import cache
-
-import torch
 from transformers import (
-    AutoConfig,
     AutoModel,
-    AutoModelForCausalLM,
-    AutoModelForSeq2SeqLM,
     AutoTokenizer,
 )
 
-from langport.data.conversation import Conversation, get_conv_template
 from langport.model.model_adapter import BaseAdapter
 
 class ChatGLMAdapter(BaseAdapter):

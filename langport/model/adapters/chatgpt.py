@@ -1,6 +1,4 @@
-from functools import cache
-
-from langport.data.conversation import Conversation, get_conv_template
+from langport.data.conversation import Conversation
 from langport.model.model_adapter import BaseAdapter
 
 
@@ -14,4 +12,12 @@ class ChatGPTAdapter(BaseAdapter):
         raise NotImplementedError()
 
     def get_default_conv_template(self, model_path: str) -> Conversation:
-        return get_conv_template("chatgpt")
+        return Conversation(
+    name="chatgpt",
+    system="You are a helpful assistant.",
+    roles=("user", "assistant"),
+    messages=[],
+    offset=0,
+    sep_style=None,
+    sep=None,
+)

@@ -1,18 +1,9 @@
-from typing import List, Optional
-import warnings
-from functools import cache
-
-import torch
 from transformers import (
-    AutoConfig,
-    AutoModel,
     AutoModelForCausalLM,
-    AutoModelForSeq2SeqLM,
     AutoTokenizer,
-    T5Tokenizer,
 )
 
-from langport.data.conversation import Conversation, get_conv_template
+from langport.data.conversation import Conversation, SeparatorStyle
 from langport.model.model_adapter import BaseAdapter
 
 
@@ -34,4 +25,13 @@ class DollyV2Adapter(BaseAdapter):
         return model, tokenizer
 
     def get_default_conv_template(self, model_path: str) -> Conversation:
-        return get_conv_template("dolly_v2")
+        return Conversation(
+    name="dolly_v2",
+    system="Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n",
+    roles=("### Instruction", "### Response"),
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.DOLLY,
+    sep="\n\n",
+    sep2="### End",
+)

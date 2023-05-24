@@ -1,22 +1,10 @@
-
-
-import sys
-from typing import List, Optional
-import warnings
-from functools import cache
-
-import torch
 from transformers import (
-    AutoConfig,
-    AutoModel,
     AutoModelForCausalLM,
-    AutoModelForSeq2SeqLM,
     AutoTokenizer,
-    LlamaTokenizer,
     LlamaForCausalLM,
 )
 
-from langport.data.conversation import Conversation, get_conv_template
+from langport.data.conversation import Conversation, SeparatorStyle
 from langport.model.model_adapter import BaseAdapter
 
 
@@ -37,7 +25,17 @@ class VicunaAdapter(BaseAdapter):
         return model, tokenizer
 
     def get_default_conv_template(self, model_path: str) -> Conversation:
-        return get_conv_template("vicuna_v1.1")
+        return Conversation(
+    name="vicuna_v1.1",
+    system="A chat between a curious user and an artificial intelligence assistant. "
+    "The assistant gives helpful, detailed, and polite answers to the user's questions.",
+    roles=("USER", "ASSISTANT"),
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.ADD_COLON_TWO,
+    sep=" ",
+    sep2="</s>",
+)
 
     def raise_warning_for_old_weights(self, model):
         if isinstance(model, LlamaForCausalLM) and model.model.vocab_size > 32000:

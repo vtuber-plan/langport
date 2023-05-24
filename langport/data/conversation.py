@@ -4,7 +4,7 @@ Conversation prompt templates.
 
 import dataclasses
 from enum import auto, Enum
-from typing import List, Tuple, Any, Dict
+from typing import List, Any
 
 
 class SeparatorStyle(Enum):
@@ -171,32 +171,3 @@ class Conversation:
             "model_name": self.model_name,
         }
 
-
-# A global registry for all conversation templates
-conv_templates: Dict[str, Conversation] = {}
-
-
-def register_conv_template(template: Conversation, override: bool = False):
-    """Register a new conversation template."""
-    if not override:
-        assert template.name not in conv_templates, f"{template.name} has been registered."
-    conv_templates[template.name] = template
-
-
-def get_conv_template(name: str) -> Conversation:
-    """Get a conversation template."""
-    return conv_templates[name].copy()
-
-from .conversation_templates import *
-register_conv_template(one_shot)
-register_conv_template(vicuna_v1_1)
-register_conv_template(koala_v1)
-register_conv_template(dolly_v2)
-register_conv_template(oasst_pythia)
-register_conv_template(stablelm)
-register_conv_template(baize)
-register_conv_template(rwkv)
-register_conv_template(openbuddy)
-register_conv_template(phoenix)
-register_conv_template(chatgpt)
-register_conv_template(claude)

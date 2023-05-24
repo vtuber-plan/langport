@@ -1,18 +1,9 @@
-from typing import List, Optional
-import warnings
-from functools import cache
-
-import torch
 from transformers import (
-    AutoConfig,
-    AutoModel,
     AutoModelForCausalLM,
-    AutoModelForSeq2SeqLM,
     AutoTokenizer,
-    T5Tokenizer,
 )
 
-from langport.data.conversation import Conversation, get_conv_template
+from langport.data.conversation import Conversation, SeparatorStyle
 from langport.model.model_adapter import BaseAdapter
 
 class PhoenixAdapter(BaseAdapter):
@@ -31,4 +22,13 @@ class PhoenixAdapter(BaseAdapter):
         return model, tokenizer
 
     def get_default_conv_template(self, model_path: str) -> Conversation:
-        return get_conv_template("phoenix")
+        return Conversation(
+    name="phoenix",
+    system="A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\n\n",
+    roles=("Human", "Assistant"),
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.PHOENIX,
+    sep="</s>",
+)
+

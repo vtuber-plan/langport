@@ -4,29 +4,16 @@ import importlib
 import pkgutil
 import sys
 import os
-from typing import List, Optional
+from typing import List
 import warnings
 from functools import cache
 
-import torch
 from transformers import (
-    AutoConfig,
-    AutoModel,
     AutoModelForCausalLM,
-    AutoModelForSeq2SeqLM,
     AutoTokenizer,
-    LlamaTokenizer,
-    LlamaForCausalLM,
-    T5Tokenizer,
 )
 
-from langport.data.conversation import Conversation, get_conv_template
-
-# from langport.model.compression import load_compress_model
-# from langport.model.monkey_patch_non_inplace import (
-#     replace_llama_attn_with_non_inplace_operations,
-# )
-from langport.utils import get_gpu_memory
+from langport.data.conversation import Conversation, SeparatorStyle
 
 
 class BaseAdapter:
@@ -43,7 +30,17 @@ class BaseAdapter:
         return model, tokenizer
 
     def get_default_conv_template(self, model_path: str) -> Conversation:
-        return get_conv_template("one_shot")
+        return Conversation(
+    name="one_shot",
+    system="A chat between a curious human and an artificial intelligence assistant. "
+    "The assistant gives helpful, detailed, and polite answers to the human's questions.",
+    roles=("Human", "Assistant"),
+    messages=[],
+    offset=2,
+    sep_style=SeparatorStyle.ADD_COLON_SINGLE,
+    sep="\n### ",
+    stop_str="###",
+)
 
 
 # A global registry for all model adapters
