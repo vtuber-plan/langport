@@ -22,6 +22,7 @@ def load_model(
     debug: bool = False,
 ):
     """Load a model from Hugging Face."""
+    adapter = get_model_adapter(model_path)
 
     # Handle device mapping
     cpu_offloading = raise_warning_for_incompatible_cpu_offloading_configuration(
@@ -69,12 +70,12 @@ def load_model(
                 "8-bit quantization is not supported for multi-gpu inference."
             )
         else:
-            return load_compress_model(
+            model, tokenizer = load_compress_model(
                 model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"]
             )
+            return adapter, model, tokenizer
 
     # Load model
-    adapter = get_model_adapter(model_path)
     model, tokenizer = adapter.load_model(model_path, kwargs)
 
     if (device == "cuda" and num_gpus == 1 and not cpu_offloading) or device == "mps":

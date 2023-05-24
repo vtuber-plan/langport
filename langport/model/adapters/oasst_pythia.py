@@ -3,7 +3,8 @@ from transformers import (
     AutoTokenizer,
 )
 
-from langport.data.conversation import Conversation, SeparatorStyle
+from langport.data.conversation import ConversationHistory, SeparatorStyle
+from langport.data.conversation.conversation_settings import get_conv_settings
 from langport.model.model_adapter import BaseAdapter
 
 class OasstPythiaAdapter(BaseAdapter):
@@ -20,14 +21,12 @@ class OasstPythiaAdapter(BaseAdapter):
             **from_pretrained_kwargs,
         )
         return model, tokenizer
-
-    def get_default_conv_template(self, model_path: str) -> Conversation:
-        return Conversation(
-    name="oasst_pythia",
-    system="",
-    roles=("<|prompter|>", "<|assistant|>"),
-    messages=[],
-    offset=0,
-    sep_style=SeparatorStyle.NO_COLON_SINGLE,
-    sep="<|endoftext|>",
-)
+    
+    def get_default_conv_template(self, model_path: str) -> ConversationHistory:
+        settings = get_conv_settings("oasst_pythia")
+        return ConversationHistory(
+            system="BEGINNING OF CONVERSATION:",
+            messages=(),
+            offset=0,
+            settings=settings,
+        )

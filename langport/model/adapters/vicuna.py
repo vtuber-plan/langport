@@ -1,10 +1,12 @@
+import warnings
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     LlamaForCausalLM,
 )
 
-from langport.data.conversation import Conversation, SeparatorStyle
+from langport.data.conversation import ConversationHistory, SeparatorStyle
+from langport.data.conversation.conversation_settings import get_conv_settings
 from langport.model.model_adapter import BaseAdapter
 
 
@@ -24,18 +26,15 @@ class VicunaAdapter(BaseAdapter):
         self.raise_warning_for_old_weights(model)
         return model, tokenizer
 
-    def get_default_conv_template(self, model_path: str) -> Conversation:
-        return Conversation(
-    name="vicuna_v1.1",
-    system="A chat between a curious user and an artificial intelligence assistant. "
-    "The assistant gives helpful, detailed, and polite answers to the user's questions.",
-    roles=("USER", "ASSISTANT"),
-    messages=[],
-    offset=0,
-    sep_style=SeparatorStyle.ADD_COLON_TWO,
-    sep=" ",
-    sep2="</s>",
-)
+    def get_default_conv_template(self, model_path: str) -> ConversationHistory:
+        settings = get_conv_settings("vicuna_v1.1")
+        return ConversationHistory(
+            system="A chat between a curious user and an artificial intelligence assistant. "
+            "The assistant gives helpful, detailed, and polite answers to the user's questions.",
+            messages=(),
+            offset=0,
+            settings=settings,
+        )
 
     def raise_warning_for_old_weights(self, model):
         if isinstance(model, LlamaForCausalLM) and model.model.vocab_size > 32000:

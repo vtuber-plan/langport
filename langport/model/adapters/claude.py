@@ -1,4 +1,5 @@
-from langport.data.conversation import Conversation, SeparatorStyle
+from langport.data.conversation import ConversationHistory, SeparatorStyle
+from langport.data.conversation.conversation_settings import get_conv_settings
 from langport.model.model_adapter import BaseAdapter
 
 
@@ -11,14 +12,11 @@ class ClaudeAdapter(BaseAdapter):
     def load_model(self, model_path: str, from_pretrained_kwargs: dict):
         raise NotImplementedError()
 
-    def get_default_conv_template(self, model_path: str) -> Conversation:
-        return Conversation(
-    name="claude",
-    system="",
-    roles=("Human", "Assistant"),
-    messages=[],
-    offset=0,
-    sep_style=SeparatorStyle.ADD_COLON_SINGLE,
-    sep="\n\n",
-)
-
+    def get_default_conv_template(self, model_path: str) -> ConversationHistory:
+        settings = get_conv_settings("claude")
+        return ConversationHistory(
+            system="",
+            messages=(),
+            offset=0,
+            settings=settings,
+        )

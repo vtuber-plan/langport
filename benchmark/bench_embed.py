@@ -17,7 +17,7 @@ def start_session(i: int, url: str, model: str) -> str:
       input="Hello! What is your name?",
     )
     # print the completion
-    out = response.data.embedding
+    out = response.data[0].embedding
     total_tokens = response.usage.total_tokens
     completion_tokens = 0
   except Exception as e:
@@ -39,7 +39,7 @@ def main(args):
       results.append(task.result())
 
   n_tokens = sum([ret[1] for ret in results])
-  n_queries = sum([1 for ret in results if ret[2] != 0])
+  n_queries = sum([1 for ret in results if ret[1] != 0])
   time_seconds = time.time() - tik
   print(
       f"Time (Completion): {time_seconds}, n threads: {args.n_thread}, "

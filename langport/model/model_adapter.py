@@ -13,7 +13,8 @@ from transformers import (
     AutoTokenizer,
 )
 
-from langport.data.conversation import Conversation, SeparatorStyle
+from langport.data.conversation import ConversationHistory, SeparatorStyle
+from langport.data.conversation.conversation_settings import get_conv_settings
 
 
 class BaseAdapter:
@@ -29,18 +30,15 @@ class BaseAdapter:
         )
         return model, tokenizer
 
-    def get_default_conv_template(self, model_path: str) -> Conversation:
-        return Conversation(
-    name="one_shot",
-    system="A chat between a curious human and an artificial intelligence assistant. "
-    "The assistant gives helpful, detailed, and polite answers to the human's questions.",
-    roles=("Human", "Assistant"),
-    messages=[],
-    offset=2,
-    sep_style=SeparatorStyle.ADD_COLON_SINGLE,
-    sep="\n### ",
-    stop_str="###",
-)
+    def get_default_conv_template(self, model_path: str) -> ConversationHistory:
+        settings = get_conv_settings("zero_shot")
+        return ConversationHistory(
+            system="A chat between a curious human and an artificial intelligence assistant. "
+            "The assistant gives helpful, detailed, and polite answers to the human's questions.",
+            messages=[],
+            offset=2,
+            settings=settings,
+        )
 
 
 # A global registry for all model adapters
@@ -87,7 +85,7 @@ def raise_warning_for_incompatible_cpu_offloading_configuration(
     return cpu_offloading
 
 
-def get_conversation_template(model_path: str) -> Conversation:
+def get_conversation_template(model_path: str) -> ConversationHistory:
     adapter = get_model_adapter(model_path)
     return adapter.get_default_conv_template(model_path)
 

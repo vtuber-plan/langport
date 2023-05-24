@@ -3,7 +3,8 @@ from transformers import (
     AutoTokenizer,
 )
 
-from langport.data.conversation import Conversation, SeparatorStyle
+from langport.data.conversation import ConversationHistory, SeparatorStyle
+from langport.data.conversation.conversation_settings import get_conv_settings
 from langport.model.model_adapter import BaseAdapter
 
 
@@ -24,14 +25,11 @@ class DollyV2Adapter(BaseAdapter):
         tokenizer.eos_token_id = 50277
         return model, tokenizer
 
-    def get_default_conv_template(self, model_path: str) -> Conversation:
-        return Conversation(
-    name="dolly_v2",
-    system="Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n",
-    roles=("### Instruction", "### Response"),
-    messages=[],
-    offset=0,
-    sep_style=SeparatorStyle.DOLLY,
-    sep="\n\n",
-    sep2="### End",
-)
+    def get_default_conv_template(self, model_path: str) -> ConversationHistory:
+        settings = get_conv_settings("dolly_v2")
+        return ConversationHistory(
+            system="Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n",
+            messages=(),
+            offset=0,
+            settings=settings,
+        )

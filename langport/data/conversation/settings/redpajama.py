@@ -1,15 +1,12 @@
 from langport.data.conversation import (
-    Conversation,
+    ConversationSettings,
     SeparatorStyle,
 )
 
 
-redpajama = Conversation(
+redpajama = ConversationSettings(
     name="redpajama-incite",
-    system="",
     roles=("<human>", "<bot>"),
-    messages=(),
-    offset=0,
     sep_style=SeparatorStyle.ADD_COLON_SINGLE,
     sep="\n",
     stop_str="<human>",

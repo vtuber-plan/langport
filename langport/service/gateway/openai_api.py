@@ -212,14 +212,14 @@ def get_gen_params(
             if msg_role == "system":
                 conv.system = message["content"]
             elif msg_role == "user":
-                conv.append_message(conv.roles[0], message["content"])
+                conv.append_message(conv.settings.roles[0], message["content"])
             elif msg_role == "assistant":
-                conv.append_message(conv.roles[1], message["content"])
+                conv.append_message(conv.settings.roles[1], message["content"])
             else:
                 raise ValueError(f"Unknown role: {msg_role}")
 
         # Add a blank message for the assistant.
-        conv.append_message(conv.roles[1], None)
+        conv.append_message(conv.settings.roles[1], None)
 
         if is_chatglm:
             prompt = conv.messages[conv.offset :]
@@ -241,7 +241,7 @@ def get_gen_params(
 
     if stop is None:
         gen_params.update(
-            {"stop": conv.stop_str, "stop_token_ids": conv.stop_token_ids}
+            {"stop": conv.settings.stop_str, "stop_token_ids": conv.settings.stop_token_ids}
         )
     else:
         gen_params.update({"stop": stop})

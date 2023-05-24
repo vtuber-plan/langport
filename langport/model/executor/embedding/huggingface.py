@@ -67,6 +67,13 @@ class HuggingfaceEmbeddingExecutor(EmbeddingExecutor):
         try:
             tokenizer = self.tokenizer
             model = self.model
+
+            # ValueError: Asking to pad but the tokenizer does not have a padding token.
+            # Please select a token to use as `pad_token` `(tokenizer.pad_token = tokenizer.eos_token e.g.)`
+            # or add a new pad token via `tokenizer.add_special_tokens({'pad_token': '[PAD]'})`.
+            if tokenizer._pad_token is None:
+                tokenizer.pad_token = tokenizer.eos_token
+
             encoded_prompts = tokenizer(prompts, return_tensors="pt", padding="longest")
             input_ids = encoded_prompts.input_ids.to(self.device)
             if model.config.is_encoder_decoder:

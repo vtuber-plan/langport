@@ -1,15 +1,12 @@
 from langport.data.conversation import (
-    Conversation,
+    ConversationSettings,
     SeparatorStyle,
 )
 
 
-bard = Conversation(
+bard = ConversationSettings(
     name="bard",
-    system="",
     roles=("0", "1"),
-    messages=(),
-    offset=0,
     sep_style=None,
     sep=None,
 )

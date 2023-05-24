@@ -1,10 +1,11 @@
 """
 Conversation prompt templates.
+From FastChat: https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py
 """
 
 import dataclasses
 from enum import auto, Enum
-from typing import List, Any
+from typing import List, Any, Tuple
 
 
 class SeparatorStyle(Enum):
@@ -12,27 +13,20 @@ class SeparatorStyle(Enum):
 
     ADD_COLON_SINGLE = auto()
     ADD_COLON_TWO = auto()
+    ADD_COLON_SPACE_SINGLE = auto()
     NO_COLON_SINGLE = auto()
-    BAIZE = auto()
+    ADD_NEW_LINE_SINGLE = auto()
     DOLLY = auto()
     RWKV = auto()
     PHOENIX = auto()
 
 
 @dataclasses.dataclass
-class Conversation:
-    """A class that keeps all conversation history."""
-
-    # The name of this template
+class ConversationSettings:
+    # The name of this settings
     name: str
-    # System prompts
-    system: str
     # Two roles
     roles: List[str]
-    # All messages
-    messages: List[List[str]]
-    # Offset of few shot examples
-    offset: int
     # Separators
     sep_style: SeparatorStyle
     sep: str
@@ -42,24 +36,43 @@ class Conversation:
     # Stops generation if meeting any token in this list
     stop_token_ids: List[int] = None
 
-    # Used for the state in the gradio servers.
-    # TODO(lmzheng): refactor this
-    conv_id: Any = None
-    skip_next: bool = False
-    model_name: str = None
+    def copy(self):
+        return ConversationSettings(
+            name=self.name,
+            roles=self.roles,
+            sep_style=self.sep_style,
+            sep=self.sep,
+            sep2=self.sep2,
+            stop_str=self.stop_str,
+            stop_token_ids=self.stop_token_ids,
+        )
 
+
+@dataclasses.dataclass
+class ConversationHistory:
+    """A class that keeps all conversation history."""
+
+    # System prompts
+    system: str
+    # All messages
+    messages: List[Tuple[str, str]]
+    # Offset of few shot examples
+    offset: int
+
+    settings: ConversationSettings
+    
     def get_prompt(self) -> str:
         """Get the prompt for generation."""
-        if self.sep_style == SeparatorStyle.ADD_COLON_SINGLE:
-            ret = self.system + self.sep
+        if self.settings.sep_style == SeparatorStyle.ADD_COLON_SINGLE:
+            ret = self.system + self.settings.sep
             for role, message in self.messages:
                 if message:
-                    ret += role + ": " + message + self.sep
+                    ret += role + ": " + message + self.settings.sep
                 else:
                     ret += role + ":"
             return ret
-        elif self.sep_style == SeparatorStyle.ADD_COLON_TWO:
-            seps = [self.sep, self.sep2]
+        elif self.settings.sep_style == SeparatorStyle.ADD_COLON_TWO:
+            seps = [self.settings.sep, self.settings.sep2]
             ret = self.system + seps[0]
             for i, (role, message) in enumerate(self.messages):
                 if message:
@@ -67,15 +80,15 @@ class Conversation:
                 else:
                     ret += role + ":"
             return ret
-        elif self.sep_style == SeparatorStyle.NO_COLON_SINGLE:
+        elif self.settings.sep_style == SeparatorStyle.NO_COLON_SINGLE:
             ret = self.system
             for role, message in self.messages:
                 if message:
-                    ret += role + message + self.sep
+                    ret += role + message + self.settings.sep
                 else:
                     ret += role
             return ret
-        elif self.sep_style == SeparatorStyle.BAIZE:
+        elif self.settings.sep_style == SeparatorStyle.BAIZE:
             ret = self.system + "\n"
             for role, message in self.messages:
                 if message:
@@ -83,8 +96,8 @@ class Conversation:
                 else:
                     ret += role
             return ret
-        elif self.sep_style == SeparatorStyle.DOLLY:
-            seps = [self.sep, self.sep2]
+        elif self.settings.sep_style == SeparatorStyle.DOLLY:
+            seps = [self.settings.sep, self.settings.sep2]
             ret = self.system
             for i, (role, message) in enumerate(self.messages):
                 if message:
@@ -94,7 +107,7 @@ class Conversation:
                 else:
                     ret += role + ":\n"
             return ret
-        elif self.sep_style == SeparatorStyle.RWKV:
+        elif self.settings.sep_style == SeparatorStyle.RWKV:
             ret = self.system
             for i, (role, message) in enumerate(self.messages):
                 if message:
@@ -107,7 +120,7 @@ class Conversation:
                 else:
                     ret += role + ":"
             return ret
-        elif self.sep_style == SeparatorStyle.PHOENIX:
+        elif self.settings.sep_style == SeparatorStyle.PHOENIX:
             ret = self.system
             for role, message in self.messages:
                 if message:
@@ -116,7 +129,7 @@ class Conversation:
                     ret += role + ": " + "<s>"
             return ret
         else:
-            raise ValueError(f"Invalid style: {self.sep_style}")
+            raise ValueError(f"Invalid style: {self.settings.sep_style}")
 
     def append_message(self, role: str, message: str):
         """Append a new message."""
@@ -145,29 +158,18 @@ class Conversation:
         return ret
 
     def copy(self):
-        return Conversation(
-            name=self.name,
+        return ConversationHistory(
             system=self.system,
-            roles=self.roles,
             messages=[[x, y] for x, y in self.messages],
             offset=self.offset,
-            sep_style=self.sep_style,
-            sep=self.sep,
-            sep2=self.sep2,
-            stop_str=self.stop_str,
-            stop_token_ids=self.stop_token_ids,
-            conv_id=self.conv_id,
-            model_name=self.model_name,
+            settings=self.settings
         )
 
     def dict(self):
         return {
-            "name": self.name,
             "system": self.system,
-            "roles": self.roles,
             "messages": self.messages,
             "offset": self.offset,
-            "conv_id": self.conv_id,
-            "model_name": self.model_name,
+            "settings": self.settings,
         }
 

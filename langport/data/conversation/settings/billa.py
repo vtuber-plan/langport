@@ -1,15 +1,12 @@
 from langport.data.conversation import (
-    Conversation,
+    ConversationSettings,
     SeparatorStyle,
 )
 
 
-billa = Conversation(
+billa = ConversationSettings(
     name="billa",
-    system="",
     roles=("Human", "Assistant"),
-    messages=(),
-    offset=0,
     sep_style=SeparatorStyle.ADD_COLON_SPACE_SINGLE,
     sep="\n",
     stop_str="Human:",

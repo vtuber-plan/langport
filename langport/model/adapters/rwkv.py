@@ -2,7 +2,8 @@ from transformers import (
     AutoTokenizer,
 )
 
-from langport.data.conversation import Conversation, SeparatorStyle
+from langport.data.conversation import ConversationHistory, SeparatorStyle
+from langport.data.conversation.conversation_settings import get_conv_settings
 from langport.model.model_adapter import BaseAdapter
 
 
@@ -21,14 +22,11 @@ class RwkvAdapter(BaseAdapter):
         )
         return model, tokenizer
 
-    def get_default_conv_template(self, model_path: str) -> Conversation:
-        return Conversation(
-    name="rwkv",
-    system="",
-    roles=("Bob", "Alice"),
-    messages=[],
-    offset=0,
-    sep_style=SeparatorStyle.RWKV,
-    sep="",
-    stop_str="\n\n",
-)
+    def get_default_conv_template(self, model_path: str) -> ConversationHistory:
+        settings = get_conv_settings("rwkv")
+        return ConversationHistory(
+            system="",
+            messages=(),
+            offset=0,
+            settings=settings,
+        )

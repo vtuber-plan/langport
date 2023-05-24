@@ -1,16 +1,13 @@
 from langport.data.conversation import (
-    Conversation,
+    ConversationSettings,
     SeparatorStyle,
 )
 
 
 # RWKV-4-Raven default template
-rwkv = Conversation(
+rwkv = ConversationSettings(
     name="rwkv",
-    system="",
     roles=("Bob", "Alice"),
-    messages=(),
-    offset=0,
     sep_style=SeparatorStyle.RWKV,
     sep="",
     stop_str="\n\n",

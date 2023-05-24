@@ -1,4 +1,5 @@
-from langport.data.conversation import Conversation
+from langport.data.conversation import ConversationHistory
+from langport.data.conversation.conversation_settings import get_conv_settings
 from langport.model.model_adapter import BaseAdapter
 
 
@@ -11,13 +12,11 @@ class ChatGPTAdapter(BaseAdapter):
     def load_model(self, model_path: str, from_pretrained_kwargs: dict):
         raise NotImplementedError()
 
-    def get_default_conv_template(self, model_path: str) -> Conversation:
-        return Conversation(
-    name="chatgpt",
-    system="You are a helpful assistant.",
-    roles=("user", "assistant"),
-    messages=[],
-    offset=0,
-    sep_style=None,
-    sep=None,
-)
+    def get_default_conv_template(self, model_path: str) -> ConversationHistory:
+        settings = get_conv_settings("chatgpt")
+        return ConversationHistory(
+            system="You are a helpful assistant.",
+            messages=(),
+            offset=0,
+            settings=settings,
+        )
