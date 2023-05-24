@@ -637,7 +637,7 @@ async def get_embedding(payload: Dict[str, Any]) -> EmbeddingWorkerResult:
         return EmbeddingWorkerResult.parse_obj(response.json())
 
 
-if __name__ in ["__main__", "langport.service.openai_api"]:
+if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
     parser = argparse.ArgumentParser(
         description="Langport ChatGPT-Compatible RESTful API server."
     )
@@ -677,10 +677,12 @@ if __name__ in ["__main__", "langport.service.openai_api"]:
 
     logger.debug(f"==== args ====\n{args}")
 
-    uvicorn.run(
-        "langport.service.gateway.openai_api:app",
-        host=args.host,
-        port=args.port,
-        log_level="info",
-        reload=True,
-    )
+    # don't delete this line, otherwise the middleware won't work with reload==True
+    if __name__ == "__main__":
+        uvicorn.run(
+            "langport.service.gateway.openai_api:app",
+            host=args.host,
+            port=args.port,
+            log_level="info",
+            reload=True,
+        )
