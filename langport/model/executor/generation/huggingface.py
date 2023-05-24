@@ -95,6 +95,7 @@ def batch_generation(
     batch_size = len(tasks)
     if batch_size == 0:
         return
+    # print(batch_size)
     
     # collect params
     prompts = [task.prompt for task in tasks]
@@ -129,7 +130,8 @@ def batch_generation(
         full_input_ids[i, : length[i]] = inputs[i]
 
     # needed variables
-    input_ids = full_input_ids[:, : min(length)].clone()
+    start_infer_pos = min(length)
+    input_ids = full_input_ids[:, : start_infer_pos].clone()
     if model.config.is_encoder_decoder:
         max_len = max(length)
         attention_mask = torch.ones(len(max_len), max_len, dtype=torch.long, device=device)
@@ -137,15 +139,15 @@ def batch_generation(
             attention_mask[i, each_length:] = 0
 
         encoder_outputs = model.encoder(input_ids=full_input_ids, attention_mask=attention_mask)
-        decoder_input_ids = torch.full(
+        decoder_input_ids_list = [torch.full(
             (batch_size, 1),
             model.generation_config.decoder_start_token_id,
             dtype=torch.long,
             device=device,
-        )
+        )]
     else:
         encoder_outputs = None
-        decoder_input_ids = input_ids
+        decoder_input_ids_list = [input_ids]
     past_key_values = None
 
     # decode state
@@ -154,6 +156,14 @@ def batch_generation(
     max_new_tokens = max([length[i] + max_tokens[i] for i in range(batch_size)]) - min(length)
     # step by step
     for step in range(max_new_tokens):
+        # inference a step
+        if len(decoder_input_ids_list) > 1:
+            decoder_input_ids = torch.stack(decoder_input_ids_list, dim=1)
+        elif len(decoder_input_ids_list) == 1:
+            decoder_input_ids = decoder_input_ids_list[0]
+        else:
+            raise Exception("decoder_input_ids_list length is 0")
+
         if model.config.is_encoder_decoder:
             out = model.decoder(
                 input_ids=decoder_input_ids,
@@ -169,7 +179,39 @@ def batch_generation(
             )
         logits = out.logits
         past_key_values = out.past_key_values
+        decoder_input_ids_list = []
 
+        # if we can skip some steps
+        need_skip = []
+        for i, task in enumerate(tasks):
+            if not is_stop[i]:
+                if step + start_infer_pos < length[i]:
+                    need_skip.append(True)
+                else:
+                    need_skip.append(False)
+        
+        if all(need_skip) and len(need_skip) < batch_size:
+            new_ids = []
+            current_len = input_ids.shape[1]
+            for i, task in enumerate(tasks):
+                if is_stop[i]:
+                    new_ids.append(pad_fill_id)
+                else:
+                    new_ids.append(full_input_ids[i, current_len])
+            
+            new_ids_tensor = torch.tensor(
+                new_ids, dtype=torch.long, device=input_ids.device
+            ).unsqueeze(1)
+
+            input_ids = torch.cat(
+                (input_ids, new_ids_tensor),
+                dim=1,
+            )
+
+            decoder_input_ids_list.append(new_ids_tensor)
+            continue
+
+        # create new ids
         new_ids = []
         current_len = input_ids.shape[1]
 
@@ -223,7 +265,7 @@ def batch_generation(
             dim=1,
         )
 
-        decoder_input_ids = new_ids_tensor
+        decoder_input_ids_list = [new_ids_tensor]
 
         for i, task in enumerate(tasks):
             if step % stream_interval == 0 or is_stop[i]:
@@ -248,8 +290,8 @@ def batch_generation(
                     text=output,
                     usage=UsageInfo(
                         prompt_tokens=length[i],
-                        total_tokens=length[i] + step,
-                        completion_tokens=step,
+                        total_tokens=start_infer_pos + step,
+                        completion_tokens=start_infer_pos + step - length[i],
                     ),
                     finish_reason=None,
                 )
@@ -265,8 +307,8 @@ def batch_generation(
                     text=output,
                     usage=UsageInfo(
                         prompt_tokens=length[i],
-                        total_tokens=length[i] + step,
-                        completion_tokens=step,
+                        total_tokens=start_infer_pos + step,
+                        completion_tokens=start_infer_pos + step - length[i],
                     ),
                     finish_reason=finish_reason,
                 )

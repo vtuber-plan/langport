@@ -324,7 +324,10 @@ async def _list_models(feature: Optional[str], client: httpx.AsyncClient) -> str
         controller_address + "/get_worker_address",
         json=payload.dict(),
     )
-    response = WorkerAddressResponse.parse_obj(ret.json())
+    try:
+        response = WorkerAddressResponse.parse_obj(ret.json())
+    except:
+        print(ret.json())
     address_list = response.address_list
     models = [json.loads(obj) for obj in response.values]
     # No available worker
@@ -574,7 +577,15 @@ async def generate_completion_stream(url: str, payload: Dict[str, Any]) -> Gener
                     for chunk in raw_chunk.split(delimiter):
                         if not chunk:
                             continue
-                        data = json.loads(chunk.decode())
+                        try:
+                            data = json.loads(chunk.decode())
+                        except json.JSONDecodeError:
+                            yield BaseWorkerResult(
+                                type="error",
+                                message=chunk.decode(),
+                                error_code=ErrorCode.ENGINE_OVERLOADED
+                            )
+                            break
                         if data["type"] == "error":
                             yield BaseWorkerResult.parse_obj(data)
                             break
@@ -585,7 +596,7 @@ async def generate_completion_stream(url: str, payload: Dict[str, Any]) -> Gener
                 message="Server is overloading",
                 error_code=ErrorCode.ENGINE_OVERLOADED
             )
-
+        
 
 async def generate_completion(payload: Dict[str, Any]) -> Optional[GenerationWorkerResult]:
     ret = None
