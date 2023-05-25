@@ -20,7 +20,7 @@ from langport.model.model_args import add_model_args
 from langport.protocol.worker_protocol import GenerationTask
 from langport.utils import build_logger
 
-from .generation_node import app
+from langport.service.server.generation_node import app
 
 
 # We suggest that concurrency == batch * thread (thread == 4)
@@ -66,6 +66,7 @@ if __name__ == "__main__":
         max_gpu_memory=args.max_gpu_memory,
         load_8bit=args.load_8bit,
         cpu_offloading=args.cpu_offloading,
+        deepspeed=args.deepspeed,
     )
 
     app.node = GenerationModelWorker(

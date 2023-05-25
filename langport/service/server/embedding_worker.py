@@ -64,6 +64,7 @@ if __name__ == "__main__":
         max_gpu_memory=args.max_gpu_memory,
         load_8bit=args.load_8bit,
         cpu_offloading=args.cpu_offloading,
+        deepspeed=args.deepspeed,
     )
 
     app.node = EmbeddingModelWorker(

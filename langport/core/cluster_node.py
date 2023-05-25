@@ -272,28 +272,37 @@ class ClusterNode(BaseNode):
 
         return ret
     
+    async def _get_node_state_local(self, node_id: str, name: str) -> Any:
+        entry = self.states.get(name, None)
+        if entry is not None:
+            return entry.get()
+        else:
+            return None
+    
+    @cached(TTLCache(maxsize=1024, ttl=1))
+    async def _get_node_state_remote(self, node_id: str, name: str) -> Any:
+        target_state = self.remote_states[node_id]
+        if name in target_state:
+            if target_state[name].is_valid():
+                return target_state[name].get()
+
+        node_info = self.neighborhoods[node_id]
+        response = await self.request_node_state(node_info.node_addr, name)
+        value = json.loads(response.state_value)
+        ttl = response.state_ttl
+        if value is not None:
+            # print(f"refresh state {name}, node id {node_id}, value {value}")
+            self.remote_states[node_id][name] = CacheState(value, ttl)
+        return self.remote_states[node_id][name].get()
+    
     async def get_node_state(self, node_id: str, name: str) -> Any:
         if node_id == self.node_id:
-            entry = self.states.get(name, None)
-            if entry is not None:
-                return entry.get()
-            else:
-                return None
-        
-        state_lock = asyncio.Lock()
-        async with state_lock:
-            target_state = self.remote_states[node_id]
-            if name in target_state:
-                if target_state[name].is_valid():
-                    return target_state[name].get()
-
-            node_info = self.neighborhoods[node_id]
-            response = await self.request_node_state(node_info.node_addr, name)
-            value = json.loads(response.state_value)
-            ttl = response.state_ttl
-            if value is not None:
-                self.remote_states[node_id][name] = CacheState(value, ttl)
-            return self.remote_states[node_id][name].get()
+            return await self._get_node_state_local(node_id, name)
+        else:
+            state_lock = asyncio.Lock()
+            async with state_lock:
+                ret = await self._get_node_state_remote(node_id, name)
+            return ret
     
     async def set_local_state(self, name: str, value: Any, ttl: int=60):
         self.states[name] = CacheState(value, ttl)

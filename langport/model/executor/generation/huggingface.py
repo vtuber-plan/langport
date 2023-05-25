@@ -328,6 +328,7 @@ class HuggingfaceGenerationExecutor(GenerationExecutor):
         max_gpu_memory: Optional[str],
         load_8bit: bool,
         cpu_offloading: bool,
+        deepspeed: bool = False,
     ) -> None:
         super(HuggingfaceGenerationExecutor, self).__init__(
             model_path=model_path,
@@ -342,7 +343,7 @@ class HuggingfaceGenerationExecutor(GenerationExecutor):
         self.model = None
         self.tokenizer = None
         self.adapter, self.model, self.tokenizer = load_model(
-            model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading
+            model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading, deepspeed
         )
 
         if hasattr(self.model.config, "max_sequence_length"):

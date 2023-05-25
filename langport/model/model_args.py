@@ -33,3 +33,6 @@ def add_model_args(parser):
         action="store_true",
         help="Only when using 8-bit quantization: Offload excess weights to the CPU that don't fit on the GPU",
     )
+    parser.add_argument(
+        "--deepspeed", action="store_true", help="Use deepspeed"
+    )

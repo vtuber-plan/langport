@@ -1,17 +1,18 @@
 # langport
 LangPort is a open-source large language model serving platform.
-Our goal is to build a super fast LLM inference service. Currently, langport infer a 7B LLaMA model loaded bf16 with a speed of 6.82 QPS and 168.26 tokens/s on four RTX3090s.
+Our goal is to build a super fast LLM inference service.
 
 This project is inspired by [lmsys/fastchat](https://github.com/lm-sys/FastChat), we hope that the serving platform is lightweight and fast, but fastchat includes other features such as training and evaluation make it complicated.
 
 The core features include:
 - A distributed serving system for state-of-the-art models.
-- Streaming batch inference for higher throughput.
+- Streaming API interface support.
+- Batch inference for higher throughput.
 - OpenAI-Compatible RESTful APIs.
 - FauxPilot-Compatible RESTful APIs.
 
 ## Benchmark
-We use single RTX3090 to run a finetuned 7B LLaMA model (OpenBuddy V0.9) in the bf16 setting. We use 32 threads to submit chat tasks to the server, and the following figure shows the Queries Per Second (QPS) and Tokens Per Second (TPS) of FastChat and LangPort with different max model concurrency settings.
+We use single RTX3090 to run a finetuned 7B LLaMA model (OpenBuddy V0.9) in the bf16 setting. We create 32 threads to submit chat tasks to the server, and the following figure shows the Queries Per Second (QPS) and Tokens Per Second (TPS) of FastChat and LangPort with different max model concurrency settings.
 
 ![benchmark_chat](docs/benchmark_chat.jpg)
 

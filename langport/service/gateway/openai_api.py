@@ -102,7 +102,14 @@ async def validation_exception_handler(request, exc):
 async def check_model(request, feature: str, model_name: str) -> Optional[JSONResponse]:
     ret = None
     async with httpx.AsyncClient() as client:
-        models = await _list_models(feature, client)
+        try:
+            models = await _list_models(feature, client)
+        except Exception as e:
+            ret = create_error_response(
+                ErrorCode.INVALID_MODEL,
+                str(e),
+            )
+            return ret
         if len(models) == 0 or model_name not in models:
             ret = create_error_response(
                 ErrorCode.INVALID_MODEL,
@@ -324,10 +331,10 @@ async def _list_models(feature: Optional[str], client: httpx.AsyncClient) -> str
         controller_address + "/get_worker_address",
         json=payload.dict(),
     )
-    try:
-        response = WorkerAddressResponse.parse_obj(ret.json())
-    except:
-        print(ret.json())
+    if ret.status_code != 200:
+        return []
+    response = WorkerAddressResponse.parse_obj(ret.json())
+    
     address_list = response.address_list
     models = [json.loads(obj) for obj in response.values]
     # No available worker

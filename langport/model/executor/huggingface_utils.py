@@ -19,6 +19,7 @@ def load_model(
     max_gpu_memory: Optional[str] = None,
     load_8bit: bool = False,
     cpu_offloading: bool = False,
+    deepspeed: bool = False,
     debug: bool = False,
 ):
     """Load a model from Hugging Face."""
@@ -64,6 +65,8 @@ def load_model(
             load_in_8bit_fp32_cpu_offload=cpu_offloading
         )
         kwargs["load_in_8bit"] = load_8bit
+        # Load model
+        model, tokenizer = adapter.load_model(model_path, kwargs)
     elif load_8bit:
         if num_gpus != 1:
             warnings.warn(
@@ -73,13 +76,31 @@ def load_model(
             model, tokenizer = load_compress_model(
                 model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"]
             )
-            return adapter, model, tokenizer
+            # return adapter, model, tokenizer
 
-    # Load model
-    model, tokenizer = adapter.load_model(model_path, kwargs)
+    if deepspeed:
+        from transformers.deepspeed import HfDeepSpeedConfig
+        import deepspeed
 
-    if (device == "cuda" and num_gpus == 1 and not cpu_offloading) or device == "mps":
-        model.to(device)
+        dtype = torch.float16
+        if load_8bit:
+            dtype = torch.int8
+        config = {
+            # "mp_size": 1,        # Number of GPU
+            "dtype": dtype, # dtype of the weights (fp16)
+            "replace_method": "auto", # Lets DS autmatically identify the layer to replace
+            "replace_with_kernel_inject": True, # replace the model with the kernel injector
+            "enable_cuda_graph": True,
+            "tensor_parallel": {
+                "enabled": True,
+                "tp_size": 1,
+            },
+        }
+        ds_engine = deepspeed.init_inference(model=model, config=config)
+        model = ds_engine.module
+    else:
+        if (device == "cuda" and num_gpus == 1 and not cpu_offloading) or device == "mps":
+            model.to(device)
 
     if debug:
         print(model)
