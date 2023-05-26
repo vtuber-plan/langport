@@ -7,6 +7,7 @@ from langport.data.conversation import (
 chatgpt = ConversationSettings(
     name="chatgpt",
     roles=("user", "assistant"),
-    sep_style=None,
-    sep=None,
+    sep_style=SeparatorStyle.ADD_COLON_SINGLE,
+    sep="\n### ",
+    stop_str="###",
 )

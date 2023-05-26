@@ -6,17 +6,18 @@ import traceback
 from typing import List, Optional
 
 import torch
+from langport.model.executor.base import LocalModelExecutor
 from langport.model.executor.embedding import EmbeddingExecutor
 from langport.model.executor.huggingface_utils import load_model
 from langport.protocol.worker_protocol import BaseWorkerResult, EmbeddingWorkerResult, UsageInfo
 from langport.workers.embedding_worker import EmbeddingModelWorker
 
 
-class HuggingfaceEmbeddingExecutor(EmbeddingExecutor):
+class HuggingfaceEmbeddingExecutor(LocalModelExecutor):
     def __init__(
         self,
-        model_path: str,
         model_name: str,
+        model_path: str,
         device: str,
         num_gpus: int,
         max_gpu_memory: Optional[str],
@@ -25,8 +26,8 @@ class HuggingfaceEmbeddingExecutor(EmbeddingExecutor):
         deepspeed: bool = False,
     ) -> None:
         super(HuggingfaceEmbeddingExecutor, self).__init__(
-            model_path=model_path,
             model_name=model_name,
+            model_path=model_path,
             device=device,
             num_gpus=num_gpus,
             max_gpu_memory=max_gpu_memory,

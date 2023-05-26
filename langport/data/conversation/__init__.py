@@ -88,13 +88,13 @@ class ConversationHistory:
                 else:
                     ret += role
             return ret
-        elif self.settings.sep_style == SeparatorStyle.BAIZE:
-            ret = self.system + "\n"
+        elif self.settings.sep_style == SeparatorStyle.ADD_NEW_LINE_SINGLE:
+            ret = self.system + self.settings.sep
             for role, message in self.messages:
                 if message:
-                    ret += role + message + "\n"
+                    ret += role + "\n" + message + self.settings.sep
                 else:
-                    ret += role
+                    ret += role + "\n"
             return ret
         elif self.settings.sep_style == SeparatorStyle.DOLLY:
             seps = [self.settings.sep, self.settings.sep2]

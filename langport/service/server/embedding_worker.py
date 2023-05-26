@@ -57,8 +57,8 @@ if __name__ == "__main__":
         args.model_name = os.path.basename(os.path.normpath(args.model_path))
 
     executor = HuggingfaceEmbeddingExecutor(
-        model_path=args.model_path,
         model_name=args.model_name,
+        model_path=args.model_path,
         device=args.device,
         num_gpus=args.num_gpus,
         max_gpu_memory=args.max_gpu_memory,

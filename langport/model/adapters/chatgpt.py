@@ -16,7 +16,7 @@ class ChatGPTAdapter(BaseAdapter):
         settings = get_conv_settings("chatgpt")
         return ConversationHistory(
             system="You are a helpful assistant.",
-            messages=(),
+            messages=[],
             offset=0,
             settings=settings,
         )

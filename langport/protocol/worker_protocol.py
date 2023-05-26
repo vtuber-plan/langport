@@ -104,10 +104,10 @@ class BaseWorkerResult(BaseModel):
 
 class EmbeddingWorkerResult(BaseWorkerResult):
     embedding: List[float]
-    usage: UsageInfo
+    usage: UsageInfo = None
 
 class GenerationWorkerResult(BaseWorkerResult):
     text: str
     logprobs: Optional[int] = None
     finish_reason: Optional[Literal["stop", "length"]] = None
-    usage: UsageInfo
+    usage: UsageInfo = None

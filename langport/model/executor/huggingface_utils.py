@@ -77,6 +77,9 @@ def load_model(
                 model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"]
             )
             # return adapter, model, tokenizer
+    else:
+        # Load model
+        model, tokenizer = adapter.load_model(model_path, kwargs)
 
     if deepspeed:
         from transformers.deepspeed import HfDeepSpeedConfig
