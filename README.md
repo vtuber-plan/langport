@@ -29,6 +29,12 @@ We use single RTX3090 to run a finetuned 7B LLaMA model (OpenBuddy V0.9) in the 
 ### Method 1: With pip
 
 ```bash
+pip3 install langport
+```
+
+or:
+
+```bash
 pip3 install git+https://github.com/vtuber-plan/langport.git 
 ```
 
