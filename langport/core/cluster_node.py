@@ -293,7 +293,9 @@ class ClusterNode(BaseNode):
         if value is not None:
             # print(f"refresh state {name}, node id {node_id}, value {value}")
             self.remote_states[node_id][name] = CacheState(value, ttl)
-        return self.remote_states[node_id][name].get()
+            return self.remote_states[node_id][name].get()
+        else:
+            return None
     
     async def get_node_state(self, node_id: str, name: str) -> Any:
         if node_id == self.node_id:

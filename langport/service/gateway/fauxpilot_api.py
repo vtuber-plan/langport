@@ -45,7 +45,7 @@ from langport.routers.gateway.openai_compatible import api_chat_completions, api
 
 logger = logging.getLogger(__name__)
 
-app = fastapi.FastAPI(debug=True)
+app = fastapi.FastAPI(debug=False)
 
 class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp, sk:str, dispatch: Optional[DispatchFunction] = None) -> None:

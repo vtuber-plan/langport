@@ -52,7 +52,7 @@ from langport.routers.gateway.openai_compatible import api_chat_completions, api
 
 logger = logging.getLogger(__name__)
 
-app = fastapi.FastAPI(debug=True)
+app = fastapi.FastAPI(debug=False)
 
 class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp, sk:str, dispatch: Optional[DispatchFunction] = None) -> None:
@@ -96,7 +96,7 @@ async def completions(request: CompletionRequest):
 @app.post("/v1/embeddings")
 async def embeddings(request: EmbeddingsRequest):
     return await api_embeddings(app.app_settings, request)
-    
+
 
 if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
     parser = argparse.ArgumentParser(

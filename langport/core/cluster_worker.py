@@ -109,8 +109,7 @@ class ClusterWorker(ClusterNode):
             return 0
         else:
             return (
-                self.limit_model_concurrency
-                - self.model_semaphore._value
+                self.task_queue.qsize()
                 + len(self.model_semaphore._waiters)
             )
 
@@ -123,6 +122,7 @@ class ClusterWorker(ClusterNode):
         result_queue = self.output_queue[task_id]
         retry_counter = 0
         while True:
+            await self.set_queue_state()
             try:
                 event = result_queue.get(block=False, timeout=None)
             except queue.Empty:
