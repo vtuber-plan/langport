@@ -14,7 +14,6 @@ from langport.workers.generation_worker import GenerationModelWorker
 
 import uvicorn
 
-from langport.model.model_args import add_model_args
 from langport.utils import build_logger
 
 from langport.service.server.generation_node import app
@@ -28,8 +27,11 @@ if __name__ == "__main__":
     parser.add_argument("--worker-address", type=str, default=None)
     parser.add_argument("--neighbors", type=str, nargs="*", default=[])
 
-    add_model_args(parser)
-    parser.add_argument("--model-name", type=str, help="Optional display name")
+    
+    parser.add_argument("--api-url", type=str, default="https://api.openai.com/v1")
+    parser.add_argument("--api-key", type=str)
+
+    parser.add_argument("--model-name", default="gpt-3.5-turbo", type=str, help="Optional display name")
     parser.add_argument("--limit-model-concurrency", type=int, default=8)
     parser.add_argument("--batch", type=int, default=4)
     parser.add_argument("--stream-interval", type=int, default=2)
@@ -38,13 +40,6 @@ if __name__ == "__main__":
     node_id = str(uuid.uuid4())
     logger = build_logger("generation_worker", f"generation_worker_{node_id}.log")
     logger.info(f"args: {args}")
-
-    if args.gpus:
-        if len(args.gpus.split(",")) < args.num_gpus:
-            raise ValueError(
-                f"Larger --num-gpus ({args.num_gpus}) than --gpus {args.gpus}!"
-            )
-        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
 
     if args.port is None:
         args.port = random.randint(21001, 29001)
@@ -55,16 +50,12 @@ if __name__ == "__main__":
     if args.model_name is None:
         args.model_name = os.path.basename(os.path.normpath(args.model_path))
     
-    from langport.model.executor.generation.huggingface import HuggingfaceGenerationExecutor
-    executor = HuggingfaceGenerationExecutor(
+
+    from langport.model.executor.generation.chatgpt import ChatGPTGenerationExecutor
+    executor = ChatGPTGenerationExecutor(
         model_name=args.model_name,
-        model_path=args.model_path,
-        device=args.device,
-        num_gpus=args.num_gpus,
-        max_gpu_memory=args.max_gpu_memory,
-        load_8bit=args.load_8bit,
-        cpu_offloading=args.cpu_offloading,
-        deepspeed=args.deepspeed,
+        api_url=args.api_url,
+        api_key=args.api_key
     )
 
     app.node = GenerationModelWorker(
