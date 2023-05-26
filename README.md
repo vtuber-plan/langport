@@ -83,3 +83,9 @@ langport is released under the Apache Software License.
 
 - [langport-docs](https://langport.readthedocs.io/)
 - [langport-source](https://github.com/vtuber-plan/langport)
+
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=vtuber-plan/langport&type=Date)](https://star-history.com/#vtuber-plan/langport&Date)
+
