@@ -14,7 +14,7 @@ The core features include:
 ## Benchmark
 We use single RTX3090 to run a finetuned 7B LLaMA model (OpenBuddy V0.9) in the bf16 setting. We create 32 threads to submit chat tasks to the server, and the following figure shows the Queries Per Second (QPS) and Tokens Per Second (TPS) of FastChat and LangPort with different max model concurrency settings.
 
-![benchmark_chat](docs/benchmark_chat.jpg)
+![benchmark_chat](assets/benchmark_chat.jpg)
 
 
 ## News
@@ -81,7 +81,7 @@ langport is released under the Apache Software License.
 
 ## See also
 
-- [langport-docs](https://langport.readthedocs.io/)
+- [langport-docs](https://github.com/vtuber-plan/langport/tree/main/docs)
 - [langport-source](https://github.com/vtuber-plan/langport)
 
 

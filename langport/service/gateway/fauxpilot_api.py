@@ -121,7 +121,7 @@ async def create_codegen_completion(request: CompletionRequest):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="FastChat ChatGPT-Compatible RESTful API server."
+        description="Langport ChatGPT-Compatible RESTful API server."
     )
     parser.add_argument("--host", type=str, default="localhost", help="host name")
     parser.add_argument("--port", type=int, default=8000, help="port number")
