@@ -13,7 +13,7 @@ from langport.core.cluster_node import ClusterNode
 from langport.core.cluster_worker import ClusterWorker
 from langport.utils import build_logger
 
-from .core_node import app
+from langport.routers.server.core_node import app
 
 logger = build_logger("langport.service.dummy_worker", "dummy_worker.log")
 

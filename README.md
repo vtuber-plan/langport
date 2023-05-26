@@ -76,7 +76,7 @@ python -m langport.service.gateway.openai_api --controller-address http://localh
 
 ## License
 
-langport is released under the MIT License.
+langport is released under the Apache Software License.
 
 
 ## See also

@@ -16,7 +16,7 @@ import uvicorn
 
 from langport.utils import build_logger
 
-from langport.service.server.generation_node import app
+from langport.routers.server.generation_node import app
 
 
 # We suggest that concurrency == batch * thread (thread == 4)

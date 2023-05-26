@@ -14,7 +14,7 @@ import uvicorn
 from langport.model.model_args import add_model_args
 from langport.utils import build_logger
 
-from .embedding_node import app
+from langport.routers.server.embedding_node import app
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
