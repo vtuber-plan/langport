@@ -83,7 +83,6 @@ def stop_by_stopwords(
             raise ValueError("Invalid stop field type.")
     return -1
 
-
 @torch.inference_mode()
 def batch_generation(
     model: PreTrainedModel,
@@ -268,7 +267,7 @@ def batch_generation(
         decoder_input_ids_list = [new_ids_tensor]
 
         for i, task in enumerate(tasks):
-            if step % stream_interval != 0:
+            if not is_stop[i] and step % stream_interval != 0:
                 continue
 
             if tasks[i].echo:
@@ -347,6 +346,8 @@ class HuggingfaceGenerationExecutor(LocalModelExecutor):
         self.adapter, self.model, self.tokenizer = load_model(
             model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading, deepspeed
         )
+
+        # self.model = torch.compile(self.model)
 
         if hasattr(self.model.config, "max_sequence_length"):
             self._context_len = self.model.config.max_sequence_length

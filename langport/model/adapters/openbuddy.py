@@ -3,6 +3,7 @@ import warnings
 import torch
 from transformers import (
     LlamaTokenizer,
+    LlamaTokenizerFast,
     LlamaForCausalLM,
 )
 
