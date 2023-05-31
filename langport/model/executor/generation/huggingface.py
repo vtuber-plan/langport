@@ -268,33 +268,35 @@ def batch_generation(
         decoder_input_ids_list = [new_ids_tensor]
 
         for i, task in enumerate(tasks):
-            if step % stream_interval == 0 or is_stop[i]:
-                if tasks[i].echo:
-                    tmp_output_ids = input_ids[i, :]
-                    rfind_start = length[i]
-                else:
-                    tmp_output_ids = input_ids[i, length[i] :]
-                    rfind_start = 0
-                output = tokenizer.decode(tmp_output_ids, skip_special_tokens=True)
+            if step % stream_interval != 0:
+                continue
 
-                # stop by stopwords
-                stop_pos = stop_by_stopwords(output, rfind_start, task.stop)
-                if stop_pos != -1:
-                    is_stop[i] = True
-                    output = output[:stop_pos]
+            if tasks[i].echo:
+                tmp_output_ids = input_ids[i, :]
+                rfind_start = length[i]
+            else:
+                tmp_output_ids = input_ids[i, length[i] :]
+                rfind_start = 0
+            output = tokenizer.decode(tmp_output_ids, skip_special_tokens=True)
 
-                # yield result
-                yield GenerationWorkerResult(
-                    task_id=task.task_id,
-                    type="data",
-                    text=output,
-                    usage=UsageInfo(
-                        prompt_tokens=length[i],
-                        total_tokens=start_infer_pos + step,
-                        completion_tokens=start_infer_pos + step - length[i],
-                    ),
-                    finish_reason=None,
-                )
+            # stop by stopwords
+            stop_pos = stop_by_stopwords(output, rfind_start, task.stop)
+            if stop_pos != -1:
+                is_stop[i] = True
+                output = output[:stop_pos]
+
+            # yield result
+            yield GenerationWorkerResult(
+                task_id=task.task_id,
+                type="data",
+                text=output,
+                usage=UsageInfo(
+                    prompt_tokens=length[i],
+                    total_tokens=start_infer_pos + step,
+                    completion_tokens=start_infer_pos + step - length[i],
+                ),
+                finish_reason=None,
+            )
 
             if is_stop[i]:
                 if current_len == length[i] + task.max_tokens - 1:
