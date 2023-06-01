@@ -19,6 +19,7 @@ We create 32 threads to submit chat tasks to the server, and the following figur
 
 
 ## News
+- [2023/05/23] Add tabby API support.
 - [2023/05/23] Add chat throughput test script.
 - [2023/05/22] New distributed architecture.
 - [2023/05/14] Batch inference supported.

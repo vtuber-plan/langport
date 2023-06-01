@@ -18,12 +18,6 @@ import uvicorn
 from langport.constants import ErrorCode
 from fastapi.exceptions import RequestValidationError
 from langport.protocol.openai_api_protocol import (
-    ChatCompletionRequest,
-    ChatCompletionResponse,
-    ChatCompletionResponseStreamChoice,
-    ChatCompletionStreamResponse,
-    ChatMessage,
-    ChatCompletionResponseChoice,
     CompletionRequest,
     CompletionResponse,
     CompletionResponseChoice,
@@ -39,14 +33,7 @@ from langport.protocol.openai_api_protocol import (
     ModelPermission,
     UsageInfo,
 )
-from langport.protocol.worker_protocol import (
-    BaseWorkerResult,
-    EmbeddingWorkerResult,
-    GenerationWorkerResult,
-    WorkerAddressRequest,
-    WorkerAddressResponse,
-)
-from langport.core.dispatch import DispatchMethod
+
 from langport.routers.gateway.common import AppSettings, _list_models, create_error_response
 from langport.routers.gateway.openai_compatible import api_chat_completions, api_completions, api_embeddings, api_models
 
@@ -83,24 +70,13 @@ async def validation_exception_handler(request, exc):
 async def models():
     return await api_models(app.app_settings)
 
-
-@app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest):
-    return await api_chat_completions(app.app_settings, request)
-
 @app.post("/v1/completions")
 async def completions(request: CompletionRequest):
     return await api_completions(app.app_settings, request)
 
-
-@app.post("/v1/embeddings")
-async def embeddings(request: EmbeddingsRequest):
-    return await api_embeddings(app.app_settings, request)
-
-
-if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
+if __name__ in ["__main__", "langport.service.gateway.tabby_api"]:
     parser = argparse.ArgumentParser(
-        description="Langport openai-compatible RESTful API server."
+        description="Langport tabby-compatible RESTful API server."
     )
     parser.add_argument("--host", type=str, default="localhost", help="host name")
     parser.add_argument("--port", type=int, default=8000, help="port number")
@@ -141,7 +117,7 @@ if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
     # don't delete this line, otherwise the middleware won't work with reload==True
     if __name__ == "__main__":
         uvicorn.run(
-            "langport.service.gateway.openai_api:app",
+            "langport.service.gateway.tabby_api:app",
             host=args.host,
             port=args.port,
             log_level="info",

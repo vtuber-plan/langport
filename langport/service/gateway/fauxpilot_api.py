@@ -84,7 +84,7 @@ async def completions(request: CompletionRequest):
 
 if __name__ in ["__main__", "langport.service.gateway.fauxpilot_api"]:
     parser = argparse.ArgumentParser(
-        description="Langport ChatGPT-Compatible RESTful API server."
+        description="Langport fauxpilot-compatible RESTful API server."
     )
     parser.add_argument("--host", type=str, default="localhost", help="host name")
     parser.add_argument("--port", type=int, default=8000, help="port number")
