@@ -83,6 +83,7 @@ def stop_by_stopwords(
             raise ValueError("Invalid stop field type.")
     return -1
 
+
 @torch.inference_mode()
 def batch_generation(
     model: PreTrainedModel,

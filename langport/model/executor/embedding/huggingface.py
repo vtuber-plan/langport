@@ -56,6 +56,7 @@ class HuggingfaceEmbeddingExecutor(LocalModelExecutor):
         input_ids = self.tokenizer(text).input_ids
         return input_ids
     
+    @torch.inference_mode()
     def inference(self, worker: "EmbeddingModelWorker"):
         if not worker.online:
             return
