@@ -12,16 +12,17 @@ The core features include:
 - FauxPilot-Compatible RESTful APIs.
 
 ## Benchmark
-We use single RTX3090 to run a finetuned 7B LLaMA model (OpenBuddy V0.9) in the bf16 setting. We create 32 threads to submit chat tasks to the server, and the following figure shows the Queries Per Second (QPS) and Tokens Per Second (TPS) of FastChat and LangPort with different max model concurrency settings.
+We use single RTX3090 to run a finetuned 7B LLaMA model (OpenBuddy V0.9) under the bf16 setting.
+We create 32 threads to submit chat tasks to the server, and the following figure shows the Queries Per Second (QPS) and Tokens Per Second (TPS) of FastChat and LangPort with different max model concurrency settings.
 
 ![benchmark_chat](assets/benchmark_chat.jpg)
 
 
 ## News
-- [2023/05/10] Langport project started.
-- [2023/05/14] Batch inference supported.
-- [2023/05/22] New distributed architecture.
 - [2023/05/23] Add chat throughput test script.
+- [2023/05/22] New distributed architecture.
+- [2023/05/14] Batch inference supported.
+- [2023/05/10] Langport project started.
 
 
 ## Install
