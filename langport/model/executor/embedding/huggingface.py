@@ -56,6 +56,12 @@ class HuggingfaceEmbeddingExecutor(LocalModelExecutor):
         input_ids = self.tokenizer(text).input_ids
         return input_ids
     
+    # Mean Pooling - Take attention mask into account for correct averaging
+    def _mean_pooling(self, model_output, attention_mask):
+        token_embeddings = model_output[0]  # First element of model_output contains all token embeddings
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+    
     @torch.inference_mode()
     def inference(self, worker: "EmbeddingModelWorker"):
         if not worker.online:
@@ -77,8 +83,8 @@ class HuggingfaceEmbeddingExecutor(LocalModelExecutor):
             if tokenizer._pad_token is None:
                 tokenizer.pad_token = tokenizer.eos_token
 
-            encoded_prompts = tokenizer(prompts, return_tensors="pt", padding="longest")
-            input_ids = encoded_prompts.input_ids.to(self.device)
+            encoded_prompts = tokenizer(prompts, return_tensors="pt", padding="longest").to(self.device)
+            input_ids = encoded_prompts.input_ids
             if model.config.is_encoder_decoder:
                 decoder_input_ids = torch.full(
                     (batch_size, 1),
@@ -88,14 +94,17 @@ class HuggingfaceEmbeddingExecutor(LocalModelExecutor):
                 )
                 model_output = model(input_ids, decoder_input_ids=decoder_input_ids, output_hidden_states=True)
                 data = model_output.decoder_hidden_states[-1]
-            else:
+            elif model.config.is_decoder:
                 model_output = model(input_ids, output_hidden_states=True)
                 is_chatglm = "chatglm" in str(type(model)).lower()
                 if is_chatglm:
                     data = model_output.hidden_states[-1].transpose(0, 1)
                 else:
                     data = model_output.hidden_states[-1]
-            embeddings = torch.mean(data, dim=1)
+            else:
+                data = model(**encoded_prompts)
+            # embeddings = torch.mean(data, dim=1)
+            embeddings = self._mean_pooling(data, encoded_prompts['attention_mask'])
             for i in range(batch_size):
                 token_num = len(tokenizer(prompts[i]).input_ids)
                 worker.push_task_result(
