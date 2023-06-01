@@ -92,7 +92,7 @@ class GenerationModelWorker(ClusterWorker):
         max_tokens = task.max_tokens
         context_length = self.executor.context_length
 
-        if prompt_tokens + max_tokens > context_length:
+        if context_length is not None and prompt_tokens + max_tokens > context_length:
             yield BaseWorkerResult(task_id=task.task_id,
                                    type="error",
                                    message=f"This model's maximum context length is {context_length} tokens. "

@@ -108,6 +108,10 @@ async def completions(request: CompletionRequest):
             n=N,
         )
     )
+    if isinstance(response, JSONResponse):
+        print(response.body)
+        return CompletionResponse()
+
     # print(response.choices[0].text.replace("\n", "\\n"))
     return CompletionResponse(choices=[
         Choice(
