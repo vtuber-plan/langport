@@ -1,4 +1,18 @@
-# langport
+<div align="center">
+
+# LangPort
+
+<a href="https://github.com/vtuber-plan/langport">
+  <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/vtuber-plan/langport?style=social">
+</a>
+<a href="https://github.com/vtuber-plan/langport/blob/main/LICENSE">
+  <img alt="License" src="https://img.shields.io/github/license/vtuber-plan/langport">
+</a>
+
+![architecture](assets/architecture.jpg)
+
+</div>
+
 LangPort is a open-source large language model serving platform.
 Our goal is to build a super fast LLM inference service.
 
@@ -19,7 +33,7 @@ We create 32 threads to submit chat tasks to the server, and the following figur
 
 
 ## News
-- [2023/05/23] Add tabby API support.
+- [2023/06/01] Add tabby API support.
 - [2023/05/23] Add chat throughput test script.
 - [2023/05/22] New distributed architecture.
 - [2023/05/14] Batch inference supported.
