@@ -17,29 +17,24 @@ import uvicorn
 
 from langport.constants import ErrorCode
 from fastapi.exceptions import RequestValidationError
-from langport.protocol.openai_api_protocol import (
+from langport.protocol.tabby_api_protocol import (
+    Choice,
     CompletionRequest,
     CompletionResponse,
-    CompletionResponseChoice,
-    DeltaMessage,
-    CompletionResponseStreamChoice,
-    CompletionStreamResponse,
-    EmbeddingsData,
-    EmbeddingsRequest,
-    EmbeddingsResponse,
-    ErrorResponse,
-    ModelCard,
-    ModelList,
-    ModelPermission,
-    UsageInfo,
+    ChoiceEvent,
+    CompletionEvent,
+    EventTypeMapping,
+    HTTPValidationError,
+    LanguagePresets,
 )
+from langport.protocol.openai_api_protocol import CompletionRequest as OpenAICompletionRequest
 
-from langport.routers.gateway.common import AppSettings, _list_models, create_error_response
-from langport.routers.gateway.openai_compatible import api_chat_completions, api_completions, api_embeddings, api_models
+from langport.routers.gateway.common import AppSettings, _list_models, check_model, check_requests, create_error_response
+from langport.routers.gateway.openai_compatible import completions_non_stream, get_gen_params
 
 logger = logging.getLogger(__name__)
 
-app = fastapi.FastAPI(debug=False)
+app = fastapi.FastAPI(debug=True)
 
 class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp, sk:str, dispatch: Optional[DispatchFunction] = None) -> None:
@@ -65,14 +60,62 @@ class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
 async def validation_exception_handler(request, exc):
     return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
 
+def trim_with_stop_words(output: str, stopwords: list) -> str:
+    for w in sorted(stopwords, key=len, reverse=True):
+        index = output.find(w)
+        if index != -1:
+            output = output[:index]
+    return output
 
-@app.get("/v1/models")
-async def models():
-    return await api_models(app.app_settings)
+@app.post("/v1/events")
+async def events(e: Union[ChoiceEvent, CompletionEvent]):
+    if isinstance(e, EventTypeMapping[e.type]):
+        # events_lib.log_event(e)
+        return JSONResponse(content="ok")
+    else:
+        print(type(e))
+        return JSONResponse(content="invalid event", status_code=422)
+
 
 @app.post("/v1/completions")
 async def completions(request: CompletionRequest):
-    return await api_completions(app.app_settings, request)
+    error_check_ret = await check_model(app.app_settings, request, "generation", app.model_name)
+    if error_check_ret is not None:
+        return error_check_ret
+    
+    preset = LanguagePresets.get(request.language, None)
+    if preset is None:
+        return CompletionResponse()
+
+    # print(request.prompt)
+    payload = get_gen_params(
+        app.model_name,
+        request.prompt,
+        temperature=0.7,
+        top_p=1.0,
+        max_tokens=preset.max_length,
+        echo=False,
+        stream=False,
+        stop=preset.stop_words,
+    )
+    N = 1
+    response = await completions_non_stream(
+        app.app_settings,
+        payload,
+        OpenAICompletionRequest(
+            model=app.model_name,
+            prompt=request.prompt,
+            n=N,
+        )
+    )
+    # print(response.choices[0].text.replace("\n", "\\n"))
+    return CompletionResponse(choices=[
+        Choice(
+            index=i,
+            text=response.choices[i].text
+        )
+        for i in range(len(response.choices))
+    ])
 
 if __name__ in ["__main__", "langport.service.gateway.tabby_api"]:
     parser = argparse.ArgumentParser(
@@ -80,6 +123,7 @@ if __name__ in ["__main__", "langport.service.gateway.tabby_api"]:
     )
     parser.add_argument("--host", type=str, default="localhost", help="host name")
     parser.add_argument("--port", type=int, default=8000, help="port number")
+    parser.add_argument("--model-name", type=str, default="J-350M", help="default tabby model name")
     parser.add_argument("--sk", type=str, default=None, help="security key")
     parser.add_argument(
         "--controller-address", type=str, default="http://localhost:21001"
@@ -110,6 +154,7 @@ if __name__ in ["__main__", "langport.service.gateway.tabby_api"]:
             BaseAuthorizationMiddleware,
             sk=args.sk,
         )
+    app.model_name = args.model_name
     app.app_settings = AppSettings(controller_address=args.controller_address)
 
     logger.debug(f"==== args ====\n{args}")
