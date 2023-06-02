@@ -20,10 +20,13 @@ This project is inspired by [lmsys/fastchat](https://github.com/lm-sys/FastChat)
 
 The core features include:
 - A distributed serving system for state-of-the-art models.
-- Streaming API interface support.
+- Streaming generation support with various decoding strategies.
 - Batch inference for higher throughput.
-- OpenAI-Compatible RESTful APIs.
-- FauxPilot-Compatible RESTful APIs.
+- Support for encoder-only, decoder-only and encoder-decoder models.
+- OpenAI-compatible RESTful APIs.
+- FauxPilot-compatible RESTful APIs.
+- HuggingFace-compatible RESTful APIs.
+- Tabby-compatible RESTful APIs.
 
 ## Benchmark
 We use single RTX3090 to run a finetuned 7B LLaMA model (OpenBuddy V0.9) under the bf16 setting.
@@ -33,6 +36,7 @@ We create 32 threads to submit chat tasks to the server, and the following figur
 
 
 ## News
+- [2023/06/01] Add HuggingFace text generation API support.
 - [2023/06/01] Add tabby API support.
 - [2023/05/23] Add chat throughput test script.
 - [2023/05/22] New distributed architecture.
@@ -94,6 +98,13 @@ python -m langport.service.server.generation_worker --port 21004 --model-path <y
 python -m langport.service.server.generation_worker --port 21005 --model-path <your model path> --neighbors http://localhost:21001 http://localhost:21004
 python -m langport.service.gateway.openai_api --controller-address http://localhost:21003 # 21003 is OK!
 python -m langport.service.gateway.openai_api --controller-address http://localhost:21002 # Any worker is also OK!
+```
+
+Run text generation with multi GPUs:
+
+``` bash
+python -m langport.service.server.generation_worker --port 21001 --model-path <your model path> --gpus 0,1 --num-gpus 2
+python -m langport.service.gateway.openai_api
 ```
 
 ## License
