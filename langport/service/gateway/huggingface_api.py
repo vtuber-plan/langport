@@ -17,7 +17,7 @@ import uvicorn
 
 from langport.constants import ErrorCode
 from fastapi.exceptions import RequestValidationError
-from langport.protocol.huggingface_api_protocol import Request
+from langport.protocol.huggingface_api_protocol import Details, FinishReason, Request, Response, StreamResponse
 from langport.protocol.openai_api_protocol import CompletionRequest as OpenAICompletionRequest
 
 from langport.routers.gateway.common import AppSettings, _list_models, check_model, check_requests, create_error_response
@@ -63,6 +63,52 @@ async def generate(request: Request):
     if error_check_ret is not None:
         return error_check_ret
     
+    temperature = 0.7
+    top_p = 1.0
+    top_k = 1.0
+    max_tokens = 2048
+    stop = []
+    if request.parameters is not None:
+        temperature = request.parameters.temperature
+        top_p = request.parameters.top_p
+        top_k = request.parameters.top_k
+        max_tokens = request.parameters.max_new_tokens
+        stop = request.parameters.stop
+    payload = get_gen_params(
+        app.model_name,
+        request.inputs,
+        temperature=temperature,
+        top_p=top_p,
+        max_tokens=max_tokens,
+        echo=False,
+        stream=False,
+        stop=stop,
+    )
+    N = 1
+    response = await completions_non_stream(
+        app.app_settings,
+        payload,
+        OpenAICompletionRequest(
+            model=app.model_name,
+            prompt=request.inputs,
+            n=N,
+        )
+    )
+    if isinstance(response, JSONResponse):
+        print(response.body)
+        return Response(generated_text="", details=Details(
+            finish_reason=FinishReason.EndOfSequenceToken,
+            generated_tokens=0,
+        ))
+
+    # print(response.choices[0].text.replace("\n", "\\n"))
+    return Response(generated_text=response.choices[0].text,
+            details=Details(
+                finish_reason=FinishReason.EndOfSequenceToken,
+                generated_tokens=response.usage.completion_tokens,
+            )
+        )
+    
 
 
 @app.post("/generate_stream")
@@ -79,6 +125,7 @@ if __name__ in ["__main__", "langport.service.gateway.huggingface_api"]:
     parser.add_argument("--host", type=str, default="localhost", help="host name")
     parser.add_argument("--port", type=int, default=8000, help="port number")
     parser.add_argument("--sk", type=str, default=None, help="security key")
+    parser.add_argument("--model-name", type=str, default="J-350M", help="default tabby model name")
     parser.add_argument(
         "--controller-address", type=str, default="http://localhost:21001"
     )
