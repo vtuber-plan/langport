@@ -14,15 +14,6 @@ class StableLMAdapter(BaseAdapter):
     def match(self, model_path: str):
         return "stablelm" in model_path
 
-    def load_model(self, model_path: str, from_pretrained_kwargs: dict):
-        tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            low_cpu_mem_usage=True,
-            **from_pretrained_kwargs,
-        )
-        return model, tokenizer
-
     def get_default_conv_template(self, model_path: str) -> ConversationHistory:
         settings = get_conv_settings("stablelm")
         return ConversationHistory(

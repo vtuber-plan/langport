@@ -1,5 +1,3 @@
-from langport.model.models.llama_cpp.llama import Llama
-
 from langport.data.conversation import ConversationHistory
 from langport.data.conversation.conversation_settings import get_conv_settings
 from langport.model.model_adapter import BaseAdapter
@@ -10,10 +8,6 @@ class LlamaCppAdapter(BaseAdapter):
 
     def match(self, model_path: str):
         return "ggml" in model_path
-
-    def load_model(self, model_path: str, from_pretrained_kwargs: dict):
-        model = Llama(model_path, **from_pretrained_kwargs)
-        return model, model.tokenizer()
 
     def get_default_conv_template(self, model_path: str) -> ConversationHistory:
         settings = get_conv_settings("llama_cpp")

@@ -1,7 +1,9 @@
 from typing import List, Optional
+from langport.model.executor.llamacpp import LlamaCppExecutor
+
 from langport.model.model_adapter import get_model_adapter
 from langport.model.models.llama_cpp.llama import Llama, LlamaTokenizer
-from langport.model.executor.base import BaseModelExecutor
+from langport.model.executor.base import BaseModelExecutor, LocalModelExecutor
 from langport.protocol.worker_protocol import BaseWorkerResult, GenerationTask, GenerationWorkerResult, UsageInfo
 from langport.workers.generation_worker import GenerationModelWorker
 
@@ -68,7 +70,7 @@ def batch_generation(
                 )
 
 
-class LlamaCppGenerationExecutor(BaseModelExecutor):
+class LlamaCppGenerationExecutor(LlamaCppExecutor):
     def __init__(
         self,
         model_name: str,
@@ -81,6 +83,10 @@ class LlamaCppGenerationExecutor(BaseModelExecutor):
     ) -> None:
         super(LlamaCppGenerationExecutor, self).__init__(
             model_name=model_name,
+            model_path=model_path,
+            device="cpu",
+            num_gpus=1,
+            max_gpu_memory=None,
         )
         self.n_ctx = n_ctx
         self.adapter = get_model_adapter(model_path)
@@ -119,3 +125,4 @@ class LlamaCppGenerationExecutor(BaseModelExecutor):
             worker.push_task_result(
                 task.task_id, BaseWorkerResult(task_id=task.task_id, type="done")
             )
+    

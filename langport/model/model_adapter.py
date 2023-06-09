@@ -8,11 +8,6 @@ from typing import List
 import warnings
 from functools import cache
 
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-)
-
 from langport.data.conversation import ConversationHistory, SeparatorStyle
 from langport.data.conversation.conversation_settings import get_conv_settings
 
@@ -22,13 +17,6 @@ class BaseAdapter:
 
     def match(self, model_path: str):
         return True
-
-    def load_model(self, model_path: str, from_pretrained_kwargs: dict):
-        tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
-        )
-        return model, tokenizer
 
     def get_default_conv_template(self, model_path: str) -> ConversationHistory:
         settings = get_conv_settings("zero_shot")
