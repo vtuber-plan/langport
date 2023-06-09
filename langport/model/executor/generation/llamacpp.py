@@ -28,8 +28,6 @@ def batch_generation(
             prompt_length = len(tokens)
             output_ids = []
 
-            # for j, token in enumerate(model.generate(tokens, top_k=40, top_p=task.top_p, 
-                                                #   temp=task.temperature, repeat_penalty=task.repetition_penalty)):
             for j, token in enumerate(model.generate(tokens, top_k=40, top_p=task.top_p, 
                                                   temp=task.temperature, repeat_penalty=1.17647)):
                 output_ids.append(token)
