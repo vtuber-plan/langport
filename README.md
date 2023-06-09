@@ -36,6 +36,8 @@ We create 32 threads to submit chat tasks to the server, and the following figur
 
 
 ## News
+- [2023/06/09] Add LLama.cpp worker support.
+- [2023/06/01] Add HuggingFace Bert embedding worker support.
 - [2023/06/01] Add HuggingFace text generation API support.
 - [2023/06/01] Add tabby API support.
 - [2023/05/23] Add chat throughput test script.
@@ -105,6 +107,12 @@ Run text generation with multi GPUs:
 ``` bash
 python -m langport.service.server.generation_worker --port 21001 --model-path <your model path> --gpus 0,1 --num-gpus 2
 python -m langport.service.gateway.openai_api
+```
+
+Run text generation with LLama.cpp worker:
+
+```bash
+python -m langport.service.server.generation_worker --port 21001 --model-path <your model path> --n-gpu-layers <num layer to gpu (resize this for your VRAM)>
 ```
 
 ## License

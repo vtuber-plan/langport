@@ -55,6 +55,7 @@ def get_model_adapter(model_path: str) -> BaseAdapter:
     """Get a model adapter for a model_path."""
     for adapter in model_adapters:
         if adapter.match(model_path):
+            print(f"Using model adapter {adapter.__class__.__name__}")
             return adapter
     raise ValueError(f"No valid model adapter for {model_path}")
 
