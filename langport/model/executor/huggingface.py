@@ -1,25 +1,10 @@
-from typing import Iterable, List, Optional, Union
+from typing import Optional
 
-
-from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import StreamingResponse, JSONResponse
-import requests
-from tenacity import retry, stop_after_attempt
-from langport.core.cluster_worker import ClusterWorker
 from langport.model.adapters.dolly_v2 import DollyV2Adapter
-from langport.model.adapters.openbuddy import OpenBuddyAdapter
 from langport.model.adapters.rwkv import RwkvAdapter
 from langport.model.adapters.t5 import T5Adapter
 from langport.model.adapters.text2vec import BertAdapter
 from langport.model.executor.base import LocalModelExecutor
-from langport.model.executor.generation import GenerationExecutor
-
-from langport.protocol.worker_protocol import (
-    BaseWorkerResult,
-    GenerationTask,
-    GenerationWorkerResult,
-    UsageInfo,
-)
 
 import torch
 
@@ -31,21 +16,6 @@ from transformers import (
     BertTokenizer,
     BertModel,
 )
-
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
-from transformers.generation.logits_process import (
-    LogitsProcessor,
-    LogitsProcessorList,
-    TemperatureLogitsWarper,
-    RepetitionPenaltyLogitsProcessor,
-    TopPLogitsWarper,
-    TopKLogitsWarper,
-)
-from langport.utils import server_error_msg, pretty_print_semaphore
-from langport.workers.generation_worker import GenerationModelWorker
-
-from cachetools import LRUCache, TTLCache
-from asyncache import cached
 
 
 import math
@@ -125,6 +95,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
         load_8bit: bool = False,
         cpu_offloading: bool = False,
         deepspeed: bool = False,
+        trust_remote_code: bool = False,
         debug: bool = False,
     ):
         """Load a model from Hugging Face."""
@@ -157,6 +128,8 @@ class HuggingfaceExecutor(LocalModelExecutor):
             replace_llama_attn_with_non_inplace_operations()
         else:
             raise ValueError(f"Invalid device: {device}")
+
+        kwargs["trust_remote_code"] = trust_remote_code
 
         if cpu_offloading:
             # raises an error on incompatible platforms

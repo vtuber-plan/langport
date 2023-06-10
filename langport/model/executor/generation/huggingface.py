@@ -311,6 +311,7 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         load_8bit: bool,
         cpu_offloading: bool,
         deepspeed: bool = False,
+        trust_remote_code: bool = False
     ) -> None:
         super(HuggingfaceGenerationExecutor, self).__init__(
             model_name=model_name,
@@ -325,7 +326,7 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         self.model = None
         self.tokenizer = None
         self.adapter, self.model, self.tokenizer = self.load_model(
-            model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading, deepspeed
+            model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading, deepspeed, trust_remote_code
         )
 
         # self.model = torch.compile(self.model)

@@ -65,6 +65,7 @@ if __name__ == "__main__":
         load_8bit=args.load_8bit,
         cpu_offloading=args.cpu_offloading,
         deepspeed=args.deepspeed,
+        trust_remote_code=args.trust_remote_code
     )
 
     app.node = EmbeddingModelWorker(
