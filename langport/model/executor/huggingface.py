@@ -10,7 +10,7 @@ from langport.model.adapters.dolly_v2 import DollyV2Adapter
 from langport.model.adapters.openbuddy import OpenBuddyAdapter
 from langport.model.adapters.rwkv import RwkvAdapter
 from langport.model.adapters.t5 import T5Adapter
-from langport.model.adapters.text2vec import SeberAdapter
+from langport.model.adapters.text2vec import BertAdapter
 from langport.model.executor.base import LocalModelExecutor
 from langport.model.executor.generation import GenerationExecutor
 
@@ -104,7 +104,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
             model = AutoModelForSeq2SeqLM.from_pretrained(
                 model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
             )
-        elif isinstance(adapter, SeberAdapter):
+        elif isinstance(adapter, BertAdapter):
             tokenizer = BertTokenizer.from_pretrained(model_path)
             model = BertModel.from_pretrained(model_path, **from_pretrained_kwargs)
 

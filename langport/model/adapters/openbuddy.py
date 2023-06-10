@@ -1,21 +1,13 @@
-import warnings
-
-import torch
-from transformers import (
-    LlamaTokenizer,
-    LlamaTokenizerFast,
-    LlamaForCausalLM,
-)
-
-from langport.data.conversation import ConversationHistory, SeparatorStyle
+from langport.data.conversation import ConversationHistory
 from langport.data.conversation.conversation_settings import get_conv_settings
 from langport.model.model_adapter import BaseAdapter
 
 class OpenBuddyAdapter(BaseAdapter):
-    """The model adapter for OpenBuddy/openbuddy-7b-v1.1-bf16-enc"""
+    """The model adapter for OpenBuddy"""
 
     def match(self, model_path: str):
-        return "openbuddy" in model_path
+        path = model_path.split('/')
+        return path[-1].startswith('openbuddy') or path[-2].startswith('openbuddy')
 
     def get_default_conv_template(self, model_path: str) -> ConversationHistory:
         settings = get_conv_settings("openbuddy")
