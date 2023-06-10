@@ -114,7 +114,7 @@ def batch_generation(
     input_ids = full_input_ids[:, : start_infer_pos].clone()
     if model.config.is_encoder_decoder:
         max_len = max(length)
-        attention_mask = torch.ones(len(max_len), max_len, dtype=torch.long, device=device)
+        attention_mask = torch.ones(batch_size, max_len, dtype=torch.long, device=device)
         for i, each_length in enumerate(length):
             attention_mask[i, each_length:] = 0
 

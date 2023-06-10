@@ -23,7 +23,7 @@ Buddy strictly refuses to discuss political, NSFW, or other unsafe topics.
 
 User: Hi.
 Assistant: Hi, I'm Buddy, your AI assistant. How can I help you today?""",
-            messages=(),
+            messages=[],
             offset=0,
             settings=settings,
         )
