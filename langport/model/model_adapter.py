@@ -15,7 +15,7 @@ from langport.data.conversation.conversation_settings import get_conv_settings
 class BaseAdapter:
     """The base and the default model adapter."""
 
-    def match(self, model_path: str):
+    def match(self, model_path: str) -> bool:
         return True
 
     def get_default_conv_template(self, model_path: str) -> ConversationHistory:
