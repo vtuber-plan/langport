@@ -1,4 +1,5 @@
-from typing import Iterable, List, Optional, Union
+from typing import Any, Iterable, List, Optional, Union
+from langport.model.executor.generation import BaseStreamer
 
 from langport.model.executor.huggingface import HuggingfaceExecutor
 
@@ -46,6 +47,284 @@ def prepare_logits_processor(
     return processor_list
 
 
+class BatchingTask:
+    def __init__(self, tasks: List[GenerationTask], tokenizer: PreTrainedTokenizerBase, device: str) -> None:
+        self.batch_size = len(tasks)
+        if self.batch_size == 0:
+            return
+        
+        self.tokenizer = tokenizer
+        self.device = device
+        
+        # collect params
+        self.tasks = tasks
+        self.prompts_ids = [self.tokenizer(task.prompt, return_tensors="pt").input_ids.squeeze(0) for task in tasks]
+        self.prompts_ids_length = [len(i) for i in self.prompts_ids]
+        self.min_prompts_length = min(self.prompts_ids_length)
+        self.max_prompts_length = max(self.prompts_ids_length)
+        self.max_tokens = [task.max_tokens for task in tasks]
+        if self.tokenizer._pad_token is None:
+            self.pad_fill_id = self.tokenizer.eos_token_id
+        else:
+            self.pad_fill_id = self.tokenizer.pad_token_id
+
+        # init logits_processor
+        self.logits_processor_list = []
+        for task in tasks:
+            logits_processor = prepare_logits_processor(
+                task.temperature, task.repetition_penalty, task.top_p, task.top_k
+            )
+            self.logits_processor_list.append(logits_processor)
+        
+        # variables used in the streaming process
+        self.batch_tokens_cache:List[List[int]] = [[] for i in range(self.batch_size)]
+        self.stop = [False for i in range(self.batch_size)]
+
+    def __len__(self):
+        return self.batch_size
+    
+    def __call__(self, return_attention_mask=True) -> Any:
+        ids = [torch.cat((self.prompts_ids[i], torch.LongTensor(self.batch_tokens_cache[i])))
+                         for i in range(self.batch_size)]
+        length = [len(i) for i in ids]
+        # padding to max(length)
+        full_input_ids = torch.full(
+            (self.batch_size, max(length)), self.pad_fill_id, dtype=torch.long, device=self.device
+        )
+        for i in range(self.batch_size):
+            full_input_ids[i, :length[i]] = ids[i]
+        if not return_attention_mask:
+            return full_input_ids
+        return full_input_ids, self._gen_attention_mask(length)
+    
+    def _gen_attention_mask(self, length:List[int]) -> torch.Tensor:
+        mask = torch.full(
+            (self.batch_size, max(length)), 0, dtype=torch.long, device=self.device
+        )
+        for i in range(self.batch_size):
+            mask[i,:length[i]] = 1
+        return mask
+    
+    def _check_idx(self, idx:int):
+        if idx>self.batch_size:
+            raise ValueError("Invalid batch index")
+    
+    def _check_batch_size(self, lenable):
+        if len(lenable) != self.batch_size:
+            raise ValueError("Different batch size")
+    
+    def get_prompt_ids(self, idx:int) -> List[int]:
+        self._check_idx(idx)
+        return self.prompts_ids[idx]
+    
+    def get_prompt_length(self, idx:int) -> int:
+        return len(self.get_prompt_ids(idx))
+    
+    def get_logits_processor_list(self, idx:int) -> LogitsProcessorList:
+        self._check_idx(idx)
+        return self.logits_processor_list[idx]
+    
+    def get_generated_ids(self, idx:int) -> List[int]:
+        self._check_idx(idx)
+        return self.batch_tokens_cache[idx]
+    
+    def get_generated_length(self, idx:int) -> int:
+        return len(self.get_generated_ids(idx))
+    
+    def update_new_token(self, batch_token: List[int]):
+        self._check_batch_size(batch_token)
+        for i,token in enumerate(batch_token):
+            if self.is_stop(i):
+                continue
+            self.batch_tokens_cache[i].append(token)
+
+            # auto check stop
+            if token == self.tokenizer.eos_token_id:
+                self.set_stop(i)
+            if self.tasks[i].stop_token_ids is not None and token in self.tasks[i].stop_token_ids:
+                self.set_stop(i)
+            if self.get_prompt_length(i) + self.get_generated_length(i) >= self.max_tokens[i]:
+                self.set_stop(i)
+                
+    def set_stop(self, idx:int):
+        self._check_idx(idx)
+        self.stop[idx] = True
+    
+    def is_stop(self, idx:int):
+        self._check_idx(idx)
+        return self.stop[idx]
+
+
+class GenerationModel:
+    def __init__(self, model:PreTrainedModel) -> None:
+        self.model = model
+    
+    @torch.inference_mode()
+    def generate(self, inputs: BatchingTask, 
+                 max_new_tokens:int,
+                 streamer:Optional[BaseStreamer]=None) -> torch.Tensor:
+
+        if inputs.batch_size == 0:
+            return
+
+        full_input_ids, attention_mask = inputs()
+        if self.model.config.is_encoder_decoder:
+            encoder_outputs = self.model.encoder(input_ids=full_input_ids, attention_mask=attention_mask)
+            decoder_input_ids_list = [torch.full(
+                (inputs.batch_size, 1),
+                self.model.generation_config.decoder_start_token_id,
+                dtype=torch.long,
+                device=self.model.device,
+            )]
+        else:
+            encoder_outputs = None
+            decoder_input_ids_list = [full_input_ids]
+        past_key_values = None
+
+        # step by step
+        for step in range(max_new_tokens):
+            # inference a step
+            if len(decoder_input_ids_list) > 1:
+                decoder_input_ids = torch.stack(decoder_input_ids_list, dim=1)
+            elif len(decoder_input_ids_list) == 1:
+                decoder_input_ids = decoder_input_ids_list[0]
+            else:
+                raise Exception("decoder_input_ids_list length is 0")
+            if self.model.config.is_encoder_decoder:
+                out = self.model.decoder(
+                    input_ids=decoder_input_ids,
+                    use_cache=self.model.generation_config.use_cache,
+                    encoder_outputs=encoder_outputs,
+                    past_key_values=past_key_values,
+                )
+            else:
+                out = self.model(
+                    input_ids=decoder_input_ids,
+                    attention_mask=attention_mask,
+                    use_cache=self.model.generation_config.use_cache,
+                    past_key_values=past_key_values,
+                )
+            logits = out.logits
+            past_key_values = out.past_key_values
+            decoder_input_ids_list = []
+
+            new_ids = []
+
+            for i, task in enumerate(inputs.tasks):
+                if inputs.is_stop(i):
+                    new_ids.append(inputs.pad_fill_id)
+                    continue
+                each_logits = logits[i, -1, :].unsqueeze(0)
+
+                logits_processor = inputs.get_logits_processor_list(i)
+                if logits_processor:
+                    if task.repetition_penalty > 1.0:
+                        tmp_output_ids = decoder_input_ids[i, :].unsqueeze(0)
+                    else:
+                        tmp_output_ids = None
+                    last_token_logits = logits_processor(tmp_output_ids, each_logits)[0]
+                else:
+                    last_token_logits = each_logits
+
+                if self.model.device.type == "mps":
+                    # Switch to CPU by avoiding some bugs in mps backend.
+                    last_token_logits = last_token_logits.float().to("cpu")
+
+                if task.temperature < 1e-5 or task.top_p < 1e-8:  # greedy
+                    token = int(torch.argmax(last_token_logits))
+                else:
+                    probs = torch.softmax(last_token_logits, dim=-1)
+                    token = int(torch.multinomial(probs, num_samples=1))
+                new_ids.append(token)
+            
+            # update state
+            inputs.update_new_token(new_ids)
+            if streamer:
+                streamer.put(new_ids)
+
+            if self.model.config.is_encoder_decoder or self.model.generation_config.use_cache:
+                # print("use cache!")
+                new_ids_tensor = torch.tensor(
+                    new_ids, dtype=torch.long, device=decoder_input_ids.device).unsqueeze(1)
+                decoder_input_ids_list = [new_ids_tensor]
+            else:
+                decoder_input_ids, attention_mask = inputs()
+                decoder_input_ids_list = [decoder_input_ids]
+
+            if all(inputs.stop):
+                break
+
+        if streamer:
+            streamer.end()
+
+        del past_key_values
+
+class GenerationWorkerStreamer(BaseStreamer):
+    def __init__(self,
+                 task_batch: BatchingTask,
+                 tokenizer: PreTrainedTokenizerBase,
+                 worker: "GenerationModelWorker") -> None:
+        self.task_batch = task_batch
+        self.tokenizer = tokenizer
+        self.worker = worker
+        self.stream_interval = worker.stream_interval
+
+        self.done = [False for i in range(task_batch.batch_size)]
+
+    def put(self, value):
+        for i in range(self.task_batch.batch_size):
+            generated_len = self.task_batch.get_generated_length(i)
+            if (self.done[i] or generated_len % self.stream_interval != 0) and self.done[i]==self.task_batch.is_stop(i):
+                continue
+            task = self.task_batch.tasks[i]
+            text = self.tokenizer.decode(self.task_batch.get_generated_ids(i), skip_special_tokens=True)
+            stop_pos = stop_by_stopwords(text, 0, task.stop)
+            if stop_pos != -1:
+                self.task_batch.set_stop(i)
+                text = text[:stop_pos]
+            prompt_len = self.task_batch.get_prompt_length(i)
+
+            if self.task_batch.is_stop(i):
+                if prompt_len + generated_len >= self.task_batch.max_tokens[i]:
+                    finish_reason = "length"
+                else:
+                    finish_reason = "stop"
+                self.worker.push_task_result(task.task_id,
+                    GenerationWorkerResult(
+                        task_id=task.task_id,
+                        type="finish",
+                        text=text,
+                        usage=UsageInfo(
+                            prompt_tokens=prompt_len,
+                            total_tokens=prompt_len + generated_len,
+                            completion_tokens=generated_len,
+                        ),
+                        finish_reason=finish_reason,
+                    )
+                )
+                self.worker.push_task_result(task.task_id,
+                    BaseWorkerResult(task_id=task.task_id, type="done")
+                )
+                self.done[i] = True
+            else:
+                self.worker.push_task_result(task.task_id,
+                    GenerationWorkerResult(
+                        task_id=task.task_id,
+                        type="data",
+                        text=text,
+                        usage=UsageInfo(
+                            prompt_tokens=prompt_len,
+                            total_tokens=prompt_len + generated_len,
+                            completion_tokens=generated_len,
+                        ),
+                        finish_reason=None,
+                    )
+                )
+
+    def end(self):
+        pass
+            
+
 def stop_by_stopwords(
     output: str, rfind_start: int, stop: Optional[Union[str, List[str]]]
 ) -> int:
@@ -62,243 +341,6 @@ def stop_by_stopwords(
         else:
             raise ValueError("Invalid stop field type.")
     return -1
-
-
-@torch.inference_mode()
-def batch_generation(
-    model: PreTrainedModel,
-    tokenizer: PreTrainedTokenizerBase,
-    device: str,
-    stream_interval: int,
-    tasks: List[GenerationTask],
-):
-    batch_size = len(tasks)
-    if batch_size == 0:
-        return
-    # print(batch_size)
-    
-    # collect params
-    prompts = [task.prompt for task in tasks]
-    max_tokens = [task.max_tokens for task in tasks]
-
-    # init logits_processor
-    logits_processor_list = []
-    for task in tasks:
-        logits_processor = prepare_logits_processor(
-            task.temperature, task.repetition_penalty, task.top_p, task.top_k
-        )
-        logits_processor_list.append(logits_processor)
-
-    # prepare init inputs
-    inputs = []
-    length = []
-    for i in range(batch_size):
-        each_inputs = tokenizer(prompts[i], return_tensors="pt")
-        each_input_ids = each_inputs.input_ids.squeeze(0)
-        inputs.append(each_input_ids)
-        length.append(len(each_input_ids))
-
-    # padding to max(length)
-    if tokenizer._pad_token is None:
-        pad_fill_id = tokenizer.eos_token_id
-    else:
-        pad_fill_id = tokenizer.pad_token_id
-    full_input_ids = torch.full(
-        (batch_size, max(length)), pad_fill_id, dtype=torch.long, device=device
-    )
-    for i in range(batch_size):
-        full_input_ids[i, : length[i]] = inputs[i]
-
-    # needed variables
-    start_infer_pos = min(length)
-    input_ids = full_input_ids[:, : start_infer_pos].clone()
-    if model.config.is_encoder_decoder:
-        max_len = max(length)
-        attention_mask = torch.ones(batch_size, max_len, dtype=torch.long, device=device)
-        for i, each_length in enumerate(length):
-            attention_mask[i, each_length:] = 0
-
-        encoder_outputs = model.encoder(input_ids=full_input_ids, attention_mask=attention_mask)
-        decoder_input_ids_list = [torch.full(
-            (batch_size, 1),
-            model.generation_config.decoder_start_token_id,
-            dtype=torch.long,
-            device=device,
-        )]
-    else:
-        encoder_outputs = None
-        decoder_input_ids_list = [input_ids]
-    past_key_values = None
-
-    # decode state
-    is_stop = [False] * batch_size
-
-    max_new_tokens = max([length[i] + max_tokens[i] for i in range(batch_size)]) - min(length)
-    # step by step
-    for step in range(max_new_tokens):
-        # inference a step
-        if len(decoder_input_ids_list) > 1:
-            decoder_input_ids = torch.stack(decoder_input_ids_list, dim=1)
-        elif len(decoder_input_ids_list) == 1:
-            decoder_input_ids = decoder_input_ids_list[0]
-        else:
-            raise Exception("decoder_input_ids_list length is 0")
-
-        if model.config.is_encoder_decoder:
-            out = model.decoder(
-                input_ids=decoder_input_ids,
-                use_cache=True,
-                encoder_outputs=encoder_outputs,
-                past_key_values=past_key_values,
-            )
-        else:
-            out = model(
-                input_ids=decoder_input_ids,
-                use_cache=True,
-                past_key_values=past_key_values,
-            )
-        logits = out.logits
-        past_key_values = out.past_key_values
-        decoder_input_ids_list = []
-
-        # if we can skip some steps
-        need_skip = []
-        for i, task in enumerate(tasks):
-            if not is_stop[i]:
-                if step + start_infer_pos < length[i]:
-                    need_skip.append(True)
-                else:
-                    need_skip.append(False)
-        
-        if all(need_skip) and len(need_skip) < batch_size:
-            new_ids = []
-            current_len = input_ids.shape[1]
-            for i, task in enumerate(tasks):
-                if is_stop[i]:
-                    new_ids.append(pad_fill_id)
-                else:
-                    new_ids.append(full_input_ids[i, current_len])
-            
-            new_ids_tensor = torch.tensor(
-                new_ids, dtype=torch.long, device=input_ids.device
-            ).unsqueeze(1)
-
-            input_ids = torch.cat(
-                (input_ids, new_ids_tensor),
-                dim=1,
-            )
-
-            decoder_input_ids_list.append(new_ids_tensor)
-            continue
-
-        # create new ids
-        new_ids = []
-        current_len = input_ids.shape[1]
-
-        for i, task in enumerate(tasks):
-            if is_stop[i]:
-                new_ids.append(pad_fill_id)
-                continue
-            each_logits = logits[i, -1, :].unsqueeze(0)
-
-            logits_processor = logits_processor_list[i]
-            if logits_processor:
-                if task.repetition_penalty > 1.0:
-                    tmp_output_ids = input_ids[i, :].unsqueeze(0)
-                else:
-                    tmp_output_ids = None
-                last_token_logits = logits_processor(tmp_output_ids, each_logits)[0]
-            else:
-                last_token_logits = each_logits
-
-            if device == "mps":
-                # Switch to CPU by avoiding some bugs in mps backend.
-                last_token_logits = last_token_logits.float().to("cpu")
-
-            if task.temperature < 1e-5 or task.top_p < 1e-8:  # greedy
-                token = int(torch.argmax(last_token_logits))
-            else:
-                probs = torch.softmax(last_token_logits, dim=-1)
-                token = int(torch.multinomial(probs, num_samples=1))
-
-            if current_len < length[i]:
-                new_token = full_input_ids[i, current_len]
-            else:
-                new_token = token
-            new_ids.append(new_token)
-
-            if task.stop_token_ids is not None and new_token in task.stop_token_ids:
-                is_stop[i] = True
-
-            if new_token == tokenizer.eos_token_id:
-                is_stop[i] = True
-
-            if current_len == length[i] + task.max_tokens - 1:
-                is_stop[i] = True
-
-        new_ids_tensor = torch.tensor(
-            new_ids, dtype=torch.long, device=input_ids.device
-        ).unsqueeze(1)
-
-        input_ids = torch.cat(
-            (input_ids, new_ids_tensor),
-            dim=1,
-        )
-
-        decoder_input_ids_list = [new_ids_tensor]
-
-        for i, task in enumerate(tasks):
-            if not is_stop[i] and step % stream_interval != 0:
-                continue
-
-            if tasks[i].echo:
-                tmp_output_ids = input_ids[i, :]
-                rfind_start = length[i]
-            else:
-                tmp_output_ids = input_ids[i, length[i] :]
-                rfind_start = 0
-            output = tokenizer.decode(tmp_output_ids, skip_special_tokens=True)
-
-            # stop by stopwords
-            stop_pos = stop_by_stopwords(output, rfind_start, task.stop)
-            if stop_pos != -1:
-                is_stop[i] = True
-                output = output[:stop_pos]
-
-            # yield result
-            yield GenerationWorkerResult(
-                task_id=task.task_id,
-                type="data",
-                text=output,
-                usage=UsageInfo(
-                    prompt_tokens=length[i],
-                    total_tokens=start_infer_pos + step,
-                    completion_tokens=start_infer_pos + step - length[i],
-                ),
-                finish_reason=None,
-            )
-
-            if is_stop[i]:
-                if current_len == length[i] + task.max_tokens - 1:
-                    finish_reason = "length"
-                else:
-                    finish_reason = "stop"
-                yield GenerationWorkerResult(
-                    task_id=task.task_id,
-                    type="finish",
-                    text=output,
-                    usage=UsageInfo(
-                        prompt_tokens=length[i],
-                        total_tokens=start_infer_pos + step,
-                        completion_tokens=start_infer_pos + step - length[i],
-                    ),
-                    finish_reason=finish_reason,
-                )
-
-        if all(is_stop):
-            break
-
-    del past_key_values
 
 class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
     def __init__(
@@ -351,22 +393,13 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
             return
 
         tasks = worker.fetch_tasks()
-        batch_size = len(tasks)
-        if batch_size == 0:
-            return
 
         # batch inference
-        for chunk in batch_generation(
-            self.model,
-            self.tokenizer,
-            self.device,
-            worker.stream_interval,
-            tasks,
-        ):
-            worker.push_task_result(chunk.task_id, chunk)
-
-        for task in tasks:
-            worker.push_task_result(
-                task.task_id, BaseWorkerResult(task_id=task.task_id, type="done")
-            )
+        inputs = BatchingTask(tasks, self.tokenizer, self.device)
+        if inputs.batch_size == 0:
+            return
+        streamer = GenerationWorkerStreamer(inputs, self.tokenizer, worker)
+        model = GenerationModel(self.model)
+        max_new_tokens = max(inputs.max_tokens)
+        model.generate(inputs,max_new_tokens,streamer)
   
