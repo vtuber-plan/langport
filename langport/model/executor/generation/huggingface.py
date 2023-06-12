@@ -137,7 +137,7 @@ class BatchingTask:
     
     def update_new_token(self, batch_token: List[int]):
         self._check_batch_size(batch_token)
-        for i,token in enumerate(batch_token):
+        for i, token in enumerate(batch_token):
             if self.is_stop(i):
                 continue
             self.batch_tokens_cache[i].append(token)
@@ -160,13 +160,13 @@ class BatchingTask:
 
 
 class GenerationModel:
-    def __init__(self, model:PreTrainedModel) -> None:
+    def __init__(self, model: PreTrainedModel) -> None:
         self.model = model
     
     @torch.inference_mode()
     def generate(self, inputs: BatchingTask, 
-                 max_new_tokens:int,
-                 streamer:Optional[BaseStreamer]=None) -> torch.Tensor:
+                 max_new_tokens: int,
+                 streamer: Optional[BaseStreamer]=None) -> torch.Tensor:
 
         if inputs.batch_size == 0:
             return
