@@ -78,7 +78,7 @@ class BatchingTask:
             self.logits_processor_list.append(logits_processor)
         
         # variables used in the streaming process
-        self.batch_tokens_cache:List[List[int]] = [[] for i in range(self.batch_size)]
+        self.batch_tokens_cache: List[List[int]] = [[] for i in range(self.batch_size)]
         self.stop = [False for i in range(self.batch_size)]
 
     def __len__(self):
@@ -101,16 +101,16 @@ class BatchingTask:
             return full_input_ids
         return full_input_ids, self._gen_attention_mask(length)
     
-    def _gen_attention_mask(self, length:List[int]) -> torch.Tensor:
+    def _gen_attention_mask(self, length: List[int]) -> torch.Tensor:
         mask = torch.full(
             (self.batch_size, max(length)), 0, dtype=torch.long, device=self.device
         )
         for i in range(self.batch_size):
-            mask[i,:length[i]] = 1
+            mask[i, :length[i]] = 1
         return mask
     
     def _check_idx(self, idx:int):
-        if idx>self.batch_size:
+        if idx > self.batch_size:
             raise ValueError("Invalid batch index")
     
     def _check_batch_size(self, lenable):
@@ -204,7 +204,6 @@ class GenerationModel:
             else:
                 out = self.model(
                     input_ids=decoder_input_ids,
-                    attention_mask=attention_mask,
                     use_cache=self.model.generation_config.use_cache,
                     past_key_values=past_key_values,
                 )
