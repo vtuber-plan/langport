@@ -1,3 +1,4 @@
+import os
 from langport.data.conversation import ConversationHistory
 from langport.data.conversation.conversation_settings import get_conv_settings
 from langport.model.model_adapter import BaseAdapter
@@ -6,8 +7,9 @@ class OpenBuddyAdapter(BaseAdapter):
     """The model adapter for OpenBuddy"""
 
     def match(self, model_path: str):
-        path = model_path.split('/')
-        return path[-1].startswith('openbuddy') or path[-2].startswith('openbuddy')
+        dir_name = os.path.basename(model_path)
+        parent_name = os.path.dirname(model_path)
+        return dir_name.startswith('openbuddy') or parent_name.startswith('openbuddy')
 
     def get_default_conv_template(self, model_path: str) -> ConversationHistory:
         settings = get_conv_settings("openbuddy")
