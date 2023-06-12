@@ -204,7 +204,6 @@ class GenerationModel:
             else:
                 out = self.model(
                     input_ids=decoder_input_ids,
-                    attention_mask=attention_mask,
                     use_cache=self.model.generation_config.use_cache,
                     past_key_values=past_key_values,
                 )
@@ -252,7 +251,7 @@ class GenerationModel:
                     new_ids, dtype=torch.long, device=decoder_input_ids.device).unsqueeze(1)
                 decoder_input_ids_list = [new_ids_tensor]
             else:
-                decoder_input_ids, attention_mask = inputs()
+                decoder_input_ids = inputs(return_attention_mask=False)
                 decoder_input_ids_list = [decoder_input_ids]
 
             if all(inputs.stop):
