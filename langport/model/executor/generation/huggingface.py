@@ -48,13 +48,14 @@ def prepare_logits_processor(
 
 
 class BatchingTask:
-    def __init__(self, tasks: List[GenerationTask], tokenizer: PreTrainedTokenizerBase, device: str) -> None:
+    def __init__(self, tasks: List[GenerationTask], tokenizer: PreTrainedTokenizerBase, device: str, is_encoder_decoder: bool) -> None:
         self.batch_size = len(tasks)
         if self.batch_size == 0:
             return
         
         self.tokenizer = tokenizer
         self.device = device
+        self.is_encoder_decoder = is_encoder_decoder
         
         # collect params
         self.tasks = tasks
@@ -92,7 +93,10 @@ class BatchingTask:
             (self.batch_size, max(length)), self.pad_fill_id, dtype=torch.long, device=self.device
         )
         for i in range(self.batch_size):
-            full_input_ids[i, -length[i]:] = ids[i] # padding side left
+            if self.is_encoder_decoder:
+                full_input_ids[i, :length[i]] = ids[i]
+            else:
+                full_input_ids[i, -length[i]:] = ids[i] # padding side left
         if not return_attention_mask:
             return full_input_ids
         return full_input_ids, self._gen_attention_mask(length)
@@ -395,11 +399,11 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         tasks = worker.fetch_tasks()
 
         # batch inference
-        inputs = BatchingTask(tasks, self.tokenizer, self.device)
+        inputs = BatchingTask(tasks, self.tokenizer, self.device, self.model.config.is_encoder_decoder)
         if inputs.batch_size == 0:
             return
         streamer = GenerationWorkerStreamer(inputs, self.tokenizer, worker)
         model = GenerationModel(self.model)
         max_new_tokens = max(inputs.max_tokens)
-        model.generate(inputs,max_new_tokens,streamer)
+        model.generate(inputs, max_new_tokens, streamer)
   
