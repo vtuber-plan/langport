@@ -92,7 +92,7 @@ class BatchingTask:
             (self.batch_size, max(length)), self.pad_fill_id, dtype=torch.long, device=self.device
         )
         for i in range(self.batch_size):
-            full_input_ids[i, :length[i]] = ids[i]
+            full_input_ids[i, -length[i]:] = ids[i] # padding side left
         if not return_attention_mask:
             return full_input_ids
         return full_input_ids, self._gen_attention_mask(length)
