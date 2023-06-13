@@ -89,7 +89,11 @@ class StreamToLogger(object):
         self.linebuf = ""
 
     def __getattr__(self, attr):
-        return getattr(self.terminal, attr)
+        try:
+            attr_value = getattr(self.terminal, attr)
+        except:
+            return None
+        return attr_value
 
     def write(self, buf):
         temp_linebuf = self.linebuf + buf

@@ -78,7 +78,7 @@ class BatchingTask:
             self.logits_processor_list.append(logits_processor)
         
         # variables used in the streaming process
-        self.batch_tokens_cache:List[List[int]] = [[] for i in range(self.batch_size)]
+        self.batch_tokens_cache: List[List[int]] = [[] for i in range(self.batch_size)]
         self.stop = [False for i in range(self.batch_size)]
 
     def __len__(self):
@@ -101,16 +101,20 @@ class BatchingTask:
             return full_input_ids
         return full_input_ids, self._gen_attention_mask(length)
     
-    def _gen_attention_mask(self, length:List[int]) -> torch.Tensor:
+    def _gen_attention_mask(self, length: List[int]) -> torch.Tensor:
         mask = torch.full(
             (self.batch_size, max(length)), 0, dtype=torch.long, device=self.device
         )
-        for i in range(self.batch_size):
-            mask[i,:length[i]] = 1
+        if self.is_encoder_decoder:
+            for i in range(self.batch_size):
+                mask[i, :length[i]] = 1
+        else:
+            for i in range(self.batch_size):
+                mask[i, -length[i]:] = 1
         return mask
     
     def _check_idx(self, idx:int):
-        if idx>self.batch_size:
+        if idx > self.batch_size:
             raise ValueError("Invalid batch index")
     
     def _check_batch_size(self, lenable):
@@ -137,7 +141,7 @@ class BatchingTask:
     
     def update_new_token(self, batch_token: List[int]):
         self._check_batch_size(batch_token)
-        for i,token in enumerate(batch_token):
+        for i, token in enumerate(batch_token):
             if self.is_stop(i):
                 continue
             self.batch_tokens_cache[i].append(token)
@@ -160,13 +164,13 @@ class BatchingTask:
 
 
 class GenerationModel:
-    def __init__(self, model:PreTrainedModel) -> None:
+    def __init__(self, model: PreTrainedModel) -> None:
         self.model = model
     
     @torch.inference_mode()
     def generate(self, inputs: BatchingTask, 
-                 max_new_tokens:int,
-                 streamer:Optional[BaseStreamer]=None) -> torch.Tensor:
+                 max_new_tokens: int,
+                 streamer: Optional[BaseStreamer]=None) -> torch.Tensor:
 
         if inputs.batch_size == 0:
             return
