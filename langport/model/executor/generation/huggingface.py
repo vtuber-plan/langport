@@ -105,8 +105,12 @@ class BatchingTask:
         mask = torch.full(
             (self.batch_size, max(length)), 0, dtype=torch.long, device=self.device
         )
-        for i in range(self.batch_size):
-            mask[i, :length[i]] = 1
+        if self.is_encoder_decoder:
+            for i in range(self.batch_size):
+                mask[i, :length[i]] = 1
+        else:
+            for i in range(self.batch_size):
+                mask[i, -length[i]:] = 1
         return mask
     
     def _check_idx(self, idx:int):
