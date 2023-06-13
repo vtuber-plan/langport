@@ -2,14 +2,11 @@ import argparse
 import os
 import random
 import uuid
-
-from langport.workers.generation_worker import GenerationModelWorker
-
 import uvicorn
 
+from langport.workers.generation_worker import GenerationModelWorker
 from langport.model.model_args import add_model_args
 from langport.utils import build_logger
-
 from langport.routers.server.generation_node import app
 
 

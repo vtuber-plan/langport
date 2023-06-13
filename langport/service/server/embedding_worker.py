@@ -1,19 +1,13 @@
 import argparse
-import asyncio
 import os
 import random
-import time
-from typing import List, Union
-import threading
 import uuid
-from langport.model.executor.embedding.huggingface import HuggingfaceEmbeddingExecutor
+import uvicorn
 
 from langport.workers.embedding_worker import EmbeddingModelWorker
-
-import uvicorn
+from langport.model.executor.embedding.huggingface import HuggingfaceEmbeddingExecutor
 from langport.model.model_args import add_model_args
 from langport.utils import build_logger
-
 from langport.routers.server.embedding_node import app
 
 if __name__ == "__main__":

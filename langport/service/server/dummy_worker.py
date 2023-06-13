@@ -1,18 +1,10 @@
 import argparse
-import asyncio
-from typing import List, Union
 import uuid
-
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
-import numpy as np
-import requests
 import uvicorn
 
 from langport.core.cluster_node import ClusterNode
 from langport.core.cluster_worker import ClusterWorker
 from langport.utils import build_logger
-
 from langport.routers.server.core_node import app
 
 logger = build_logger("langport.service.dummy_worker", "dummy_worker.log")

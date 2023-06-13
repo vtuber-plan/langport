@@ -3,19 +3,15 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 import httpx
 import pandas as pd
-import uvicorn
+import graphyte
 
 from langport.protocol.worker_protocol import WorkerAddressRequest, WorkerAddressResponse
-
 from langport.routers.gateway.common import AppSettings
 
-logger = logging.getLogger(__name__)
 
-import sys
-import graphyte
+logger = logging.getLogger(__name__)
 
 async def list_workers(app_settings: AppSettings):
     data_dict = {
