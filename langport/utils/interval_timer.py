@@ -42,9 +42,10 @@ class IntervalTimer(object):
         kwargs: Optional[Mapping[str, Any]] = None,
     ):
         try:
-            loop = asyncio.new_event_loop()
             if inspect.iscoroutinefunction(self.fn):
+                loop = asyncio.new_event_loop()
                 loop.run_until_complete(self.fn(*args, **kwargs))
+                loop.close()
             else:
                 self.fn(*args, **kwargs)
         except:
