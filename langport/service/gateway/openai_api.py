@@ -55,15 +55,18 @@ class RedirectModelMiddleware(BaseHTTPMiddleware):
         if "content-type" not in request.headers or request.headers["content-type"] != "application/json":
             return await call_next(request)
         
-        await self.set_body(request)
-        data = await request.json()
-        if "model" in data:
-            for rule in self.redirect_rules:
-                from_model_name, to_model_name = rule.split(":")
-                if data["model"] == from_model_name:
-                    data["model"] = to_model_name
-                    self.receive_['body'] = json.dumps(data).encode("utf-8")
-                    break
+        try:
+            await self.set_body(request)
+            data = await request.json()
+            if "model" in data:
+                for rule in self.redirect_rules:
+                    from_model_name, to_model_name = rule.split(":")
+                    if data["model"] == from_model_name:
+                        data["model"] = to_model_name
+                        self.receive_['body'] = json.dumps(data).encode("utf-8")
+                        break
+        except Exception as e:
+            logger.error(f"RedirectModelMiddleware: {e}")
         return await call_next(request)
     
     async def set_body(self, request):
