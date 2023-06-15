@@ -151,13 +151,10 @@ class ClusterWorker(ClusterNode):
     async def get_worker_address(self, condition: str, expression: str) -> Optional[str]:
         condition_variables = re.findall(r'\{(.*?)\}', condition)
         expression_variables = re.findall(r'\{(.*?)\}', expression)
-        print(condition_variables)
-        print(expression_variables)
 
         worker_ids = []
         worker_address = []
         worker_values = []
-        print(self.neighborhoods.items())
         for w_id, w_info in self.neighborhoods.items():
             final_condition = condition
             final_condition_variables = {}

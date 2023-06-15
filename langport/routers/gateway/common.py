@@ -111,7 +111,7 @@ async def _list_models(app_settings: AppSettings, feature: Optional[str], client
         if ret.status_code != 200:
             return []
     except Exception as e:
-        print("list model: ", e)
+        print("[Exception] list model: ", e)
         return []
     response = WorkerAddressResponse.parse_obj(ret.json())
     
