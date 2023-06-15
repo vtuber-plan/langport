@@ -45,6 +45,34 @@ class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class RedirectModelMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: ASGIApp,  redirect_rules:list, dispatch: Optional[DispatchFunction] = None) -> None:
+        super().__init__(app, dispatch)
+        self.redirect_rules = redirect_rules
+        self.receive_ = None
+
+    async def dispatch(self, request, call_next):
+        if "content-type" not in request.headers or request.headers["content-type"] != "application/json":
+            return await call_next(request)
+        
+        await self.set_body(request)
+        data = await request.json()
+        if "model" in data:
+            for rule in self.redirect_rules:
+                from_model_name, to_model_name = rule.split(":")
+                if data["model"] == from_model_name:
+                    data["model"] = to_model_name
+                    self.receive_['body'] = json.dumps(data).encode("utf-8")
+                    break
+        return await call_next(request)
+    
+    async def set_body(self, request):
+        self.receive_ = await request._receive()
+        async def receive():
+            return self.receive_
+        request._receive = receive
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
     return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
@@ -91,6 +119,7 @@ if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
     parser.add_argument(
         "--allowed-headers", type=json.loads, default=["*"], help="allowed headers"
     )
+    parser.add_argument("--redirect", action="append", required=False, help="redirect model_name to another model_name, e.g. --redirect model_name1:model_name2")
     args = parser.parse_args()
 
     app.add_middleware(
@@ -100,6 +129,11 @@ if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
         allow_methods=args.allowed_methods,
         allow_headers=args.allowed_headers,
     )
+    if args.redirect is not None:
+        app.add_middleware(
+            RedirectModelMiddleware,
+            redirect_rules=args.redirect,
+        )
     if args.sk is not None:
         app.add_middleware(
             BaseAuthorizationMiddleware,

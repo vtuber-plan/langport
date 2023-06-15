@@ -107,3 +107,11 @@ Here we list the parameter compatibility of completions API.
         - [x] Nucleus-sampling (top-p)
         - [x] Stop sequences
         - [x] Presence and frequency penalties
+
+## Redirect Model Name
+
+By using the redirect arg, the model name passed to the API can be redirected to a specific model, which is often very helpful when reusing downstream applications under OpenAI.
+
+```shell
+python -m langport.service.gateway.openai_api --host 0.0.0.0 --redirect gpt-4:openbuddy --redirect gpt-3.5-turbo:openbuddy
+```
