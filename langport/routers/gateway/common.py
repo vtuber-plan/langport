@@ -103,12 +103,15 @@ async def _list_models(app_settings: AppSettings, feature: Optional[str], client
     payload = WorkerAddressRequest(
         condition=condition, expression="{model_name}"
     )
-
-    ret = await client.post(
-        controller_address + "/get_worker_address",
-        json=payload.dict(),
-    )
-    if ret.status_code != 200:
+    try:
+        ret = await client.post(
+            controller_address + "/get_worker_address",
+            json=payload.dict(),
+        )
+        if ret.status_code != 200:
+            return []
+    except Exception as e:
+        print("list model: ", e)
         return []
     response = WorkerAddressResponse.parse_obj(ret.json())
     
