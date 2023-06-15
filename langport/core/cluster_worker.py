@@ -1,40 +1,16 @@
-import argparse
 import asyncio
 from collections import defaultdict
-import dataclasses
-from functools import partial
 import logging
 import json
-import os
 import re
-import time
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Union
-import threading
+from typing import Dict, List, Optional
+
 import queue
-import uuid
-
-
-import httpx
-import numpy as np
-import requests
-from tenacity import retry, stop_after_attempt
-from langport.core.base_node import BaseNode
 from langport.core.cluster_node import ClusterNode
 
 from langport.protocol.worker_protocol import (
     BaseWorkerResult,
     BaseWorkerTask,
-    NodeInfo,
-    NodeInfoRequest,
-    NodeInfoResponse,
-    NodeListRequest,
-    NodeListResponse,
-    RegisterNodeRequest,
-    RegisterNodeResponse,
-    RemoveNodeRequest,
-    RemoveNodeResponse,
-    HeartbeatPing,
-    HeartbeatPong,
     WorkerAddressRequest,
     WorkerAddressResponse,
 )
@@ -46,7 +22,6 @@ from langport.constants import (
     ErrorCode,
 )
 from langport.utils.evaluation import safe_eval
-from langport.utils.interval_timer import IntervalTimer
 
 class ClusterWorker(ClusterNode):
     def __init__(
@@ -176,10 +151,13 @@ class ClusterWorker(ClusterNode):
     async def get_worker_address(self, condition: str, expression: str) -> Optional[str]:
         condition_variables = re.findall(r'\{(.*?)\}', condition)
         expression_variables = re.findall(r'\{(.*?)\}', expression)
+        print(condition_variables)
+        print(expression_variables)
 
         worker_ids = []
         worker_address = []
         worker_values = []
+        print(self.neighborhoods.items())
         for w_id, w_info in self.neighborhoods.items():
             final_condition = condition
             final_condition_variables = {}
