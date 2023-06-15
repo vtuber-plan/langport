@@ -1,7 +1,7 @@
 
 
 from typing import Optional
-from langport.model.models.llama_cpp.llama import Llama
+from llama_cpp import Llama
 from langport.model.executor.base import LocalModelExecutor
 
 

@@ -1,8 +1,9 @@
 from typing import List, Optional
-from langport.model.executor.llamacpp import LlamaCppExecutor
 
+from llama_cpp import Llama, LlamaTokenizer
+
+from langport.model.executor.llamacpp import LlamaCppExecutor
 from langport.model.model_adapter import get_model_adapter
-from langport.model.models.llama_cpp.llama import Llama, LlamaTokenizer
 from langport.model.executor.base import BaseModelExecutor, LocalModelExecutor
 from langport.protocol.worker_protocol import BaseWorkerResult, GenerationTask, GenerationWorkerResult, UsageInfo
 from langport.workers.generation_worker import GenerationModelWorker
@@ -90,7 +91,7 @@ class LlamaCppGenerationExecutor(LlamaCppExecutor):
         )
         self.n_ctx = n_ctx
         self.adapter = get_model_adapter(model_path)
-        self.model, self.tokenizer = self.adapter.load_model(model_path, {"n_ctx":n_ctx,
+        self.model, self.tokenizer = self.load_model(model_path, {"n_ctx":n_ctx,
                                                                           "n_gpu_layers":n_gpu_layers, 
                                                                           "seed":seed, 
                                                                           "n_batch":n_batch, 

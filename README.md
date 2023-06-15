@@ -60,6 +60,11 @@ or:
 pip3 install git+https://github.com/vtuber-plan/langport.git 
 ```
 
+If you need llamacpp generation worker, use this command:
+```bash
+pip3 install langport[llamacpp]
+```
+
 ### Method 2: From source
 
 1. Clone this repository

@@ -10,10 +10,3 @@ class ChatGLMAdapter(BaseAdapter):
 
     def match(self, model_path: str):
         return "chatglm" in model_path
-
-    def load_model(self, model_path: str, from_pretrained_kwargs: dict):
-        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-        model = AutoModel.from_pretrained(
-            model_path, trust_remote_code=True, **from_pretrained_kwargs
-        )
-        return model, tokenizer

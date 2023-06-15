@@ -22,6 +22,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["black==23.3.0", "pylint==2.8.2"]
 
+[project.optional-dependencies]
+llamacpp = ["llama-cpp-python"]
+
 [project.urls]
 "Homepage" = "https://github.com/vtuber-plan/langport"
 "Bug Tracker" = "https://github.com/vtuber-plan/langport/issues"
