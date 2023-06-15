@@ -7,6 +7,8 @@ class OpenBuddyAdapter(BaseAdapter):
     """The model adapter for OpenBuddy"""
 
     def match(self, model_path: str):
+        if model_path.endswith('/'):
+            model_path = model_path[:-1]
         dir_name = os.path.basename(model_path)
         parent_name = os.path.dirname(model_path)
         return dir_name.startswith('openbuddy') or parent_name.startswith('openbuddy')
