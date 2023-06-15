@@ -197,7 +197,6 @@ class ClusterNode(BaseNode):
         data = HeartbeatPing(
             node_id=self.node_id,
         )
-
         response = await self.client.post(
             node_addr + "/heartbeat",
             headers=self.headers,

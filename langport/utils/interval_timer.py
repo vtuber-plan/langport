@@ -44,6 +44,7 @@ class IntervalTimer(object):
         try:
             if inspect.iscoroutinefunction(self.fn):
                 loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
                 loop.run_until_complete(self.fn(*args, **kwargs))
                 loop.close()
             else:
@@ -57,14 +58,14 @@ class IntervalTimer(object):
                 start_time = time.time()
                 if start_time - self.last_time > self.interval:
                     self._executor.submit(self.function_wrapper, self.args, self.kwargs)
-                    finish_time = time.time()
-                    self.last_time = finish_time
-                    if finish_time - start_time > self.interval:
-                        print(
-                            f"Overloaded!! Last timer using {finish_time - start_time}s."
-                        )
-                    else:
-                        time.sleep(0.01)
+                    self.last_time = time.time()
+                    # Never run this code, because finish_time - start_time = 0.
+                    # if finish_time - start_time > self.interval:
+                    #     print(
+                    #         f"Overloaded!! Last timer using {finish_time - start_time}s."
+                    #     )
+                    # else:
+                        # time.sleep(0.01)
                 else:
                     time.sleep(0.01)
             else:
