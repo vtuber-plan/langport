@@ -2,19 +2,23 @@ import httpx
 
 class AsyncHttpPool(object):
     def __init__(self) -> None:
-        self.client = httpx.AsyncClient()
+        pass
 
     async def get(self, *args, **kwarg):
-        response = await self.client.get(*args, **kwarg)
+        client = httpx.AsyncClient()
+        response = await client.get(*args, **kwarg)
+        await client.aclose()
         return response
     
     async def post(self, *args, **kwarg):
-        response = await self.client.post(*args, **kwarg)
+        client = httpx.AsyncClient()
+        response = await client.post(*args, **kwarg)
+        await client.aclose()
         return response
     
     def stream(self, *args, **kwarg):
-        return self.client.stream(*args, **kwarg)
+        with httpx.AsyncClient() as client:
+            return client.stream(*args, **kwarg)
 
     async def aclose(self):
-        await self.client.aclose()
-        self.client = None
+        pass

@@ -8,11 +8,6 @@ from typing import List
 import warnings
 from functools import cache
 
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-)
-
 from langport.data.conversation import ConversationHistory, SeparatorStyle
 from langport.data.conversation.conversation_settings import get_conv_settings
 
@@ -20,15 +15,8 @@ from langport.data.conversation.conversation_settings import get_conv_settings
 class BaseAdapter:
     """The base and the default model adapter."""
 
-    def match(self, model_path: str):
+    def match(self, model_path: str) -> bool:
         return True
-
-    def load_model(self, model_path: str, from_pretrained_kwargs: dict):
-        tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
-        )
-        return model, tokenizer
 
     def get_default_conv_template(self, model_path: str) -> ConversationHistory:
         settings = get_conv_settings("zero_shot")
@@ -55,6 +43,7 @@ def get_model_adapter(model_path: str) -> BaseAdapter:
     """Get a model adapter for a model_path."""
     for adapter in model_adapters:
         if adapter.match(model_path):
+            print(f"Using model adapter {adapter.__class__.__name__}")
             return adapter
     raise ValueError(f"No valid model adapter for {model_path}")
 

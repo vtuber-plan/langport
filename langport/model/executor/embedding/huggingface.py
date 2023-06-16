@@ -1,19 +1,13 @@
-
-
-
-
 import traceback
 from typing import List, Optional
 
 import torch
-from langport.model.executor.base import LocalModelExecutor
-from langport.model.executor.embedding import EmbeddingExecutor
-from langport.model.executor.huggingface_utils import load_model
+from langport.model.executor.huggingface import HuggingfaceExecutor
 from langport.protocol.worker_protocol import BaseWorkerResult, EmbeddingWorkerResult, UsageInfo
 from langport.workers.embedding_worker import EmbeddingModelWorker
 
 
-class HuggingfaceEmbeddingExecutor(LocalModelExecutor):
+class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
     def __init__(
         self,
         model_name: str,
@@ -24,6 +18,7 @@ class HuggingfaceEmbeddingExecutor(LocalModelExecutor):
         load_8bit: bool,
         cpu_offloading: bool,
         deepspeed: bool = False,
+        trust_remote_code: bool = False,
     ) -> None:
         super(HuggingfaceEmbeddingExecutor, self).__init__(
             model_name=model_name,
@@ -37,8 +32,8 @@ class HuggingfaceEmbeddingExecutor(LocalModelExecutor):
         self.adapter = None
         self.model = None
         self.tokenizer = None
-        self.adapter, self.model, self.tokenizer = load_model(
-            model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading, deepspeed
+        self.adapter, self.model, self.tokenizer = self.load_model(
+            model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading, deepspeed, trust_remote_code
         )
 
         if hasattr(self.model.config, "max_sequence_length"):

@@ -1,53 +1,24 @@
 import argparse
-import asyncio
 import json
 import logging
 
-from typing import Generator, Optional, Union, Dict, List, Any
+from typing import Optional
 
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, DispatchFunction
-import httpx
-import numpy as np
 from starlette.types import ASGIApp
-from tenacity import retry, stop_after_attempt
 import uvicorn
 
 from langport.constants import ErrorCode
 from fastapi.exceptions import RequestValidationError
 from langport.protocol.openai_api_protocol import (
     ChatCompletionRequest,
-    ChatCompletionResponse,
-    ChatCompletionResponseStreamChoice,
-    ChatCompletionStreamResponse,
-    ChatMessage,
-    ChatCompletionResponseChoice,
     CompletionRequest,
-    CompletionResponse,
-    CompletionResponseChoice,
-    DeltaMessage,
-    CompletionResponseStreamChoice,
-    CompletionStreamResponse,
-    EmbeddingsData,
     EmbeddingsRequest,
-    EmbeddingsResponse,
-    ErrorResponse,
-    ModelCard,
-    ModelList,
-    ModelPermission,
-    UsageInfo,
 )
-from langport.protocol.worker_protocol import (
-    BaseWorkerResult,
-    EmbeddingWorkerResult,
-    GenerationWorkerResult,
-    WorkerAddressRequest,
-    WorkerAddressResponse,
-)
-from langport.core.dispatch import DispatchMethod
-from langport.routers.gateway.common import AppSettings, _list_models, create_error_response
+from langport.routers.gateway.common import AppSettings, create_error_response
 from langport.routers.gateway.openai_compatible import api_chat_completions, api_completions, api_embeddings, api_models
 
 logger = logging.getLogger(__name__)
@@ -72,6 +43,37 @@ class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
                 headers={"WWW-Authenticate": "Bearer"},
             )
         return await call_next(request)
+
+
+class RedirectModelMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: ASGIApp,  redirect_rules:list, dispatch: Optional[DispatchFunction] = None) -> None:
+        super().__init__(app, dispatch)
+        self.redirect_rules = redirect_rules
+        self.receive_ = None
+
+    async def dispatch(self, request, call_next):
+        if "content-type" not in request.headers or request.headers["content-type"] != "application/json":
+            return await call_next(request)
+        
+        try:
+            await self.set_body(request)
+            data = await request.json()
+            if "model" in data:
+                for rule in self.redirect_rules:
+                    from_model_name, to_model_name = rule.split(":")
+                    if data["model"] == from_model_name:
+                        data["model"] = to_model_name
+                        self.receive_['body'] = json.dumps(data).encode("utf-8")
+                        break
+        except Exception as e:
+            logger.error(f"RedirectModelMiddleware: {e}")
+        return await call_next(request)
+    
+    async def set_body(self, request):
+        self.receive_ = await request._receive()
+        async def receive():
+            return self.receive_
+        request._receive = receive
 
 
 @app.exception_handler(RequestValidationError)
@@ -120,6 +122,7 @@ if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
     parser.add_argument(
         "--allowed-headers", type=json.loads, default=["*"], help="allowed headers"
     )
+    parser.add_argument("--redirect", action="append", required=False, help="redirect model_name to another model_name, e.g. --redirect model_name1:model_name2")
     args = parser.parse_args()
 
     app.add_middleware(
@@ -129,6 +132,11 @@ if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
         allow_methods=args.allowed_methods,
         allow_headers=args.allowed_headers,
     )
+    if args.redirect is not None:
+        app.add_middleware(
+            RedirectModelMiddleware,
+            redirect_rules=args.redirect,
+        )
     if args.sk is not None:
         app.add_middleware(
             BaseAuthorizationMiddleware,

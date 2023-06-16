@@ -1,19 +1,11 @@
 import argparse
-import asyncio
-from typing import List, Union
 import uuid
-
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
-import numpy as np
-import requests
 import uvicorn
 
-from langport.core.cluster_node import ClusterNode
 from langport.core.cluster_worker import ClusterWorker
 from langport.utils import build_logger
-
 from langport.routers.server.core_node import app
+from langport.utils.cache_state import CacheState
 
 logger = build_logger("langport.service.dummy_worker", "dummy_worker.log")
 
@@ -36,4 +28,5 @@ if __name__ == "__main__":
         stream_interval=2,
         logger=logger,
     )
+    app.node.states["model_name"] = CacheState("dummy_node", 360)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")

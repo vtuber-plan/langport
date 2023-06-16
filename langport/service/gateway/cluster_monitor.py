@@ -1,9 +1,7 @@
 
 import argparse
-import json
 import logging
 import os
-import uvicorn
 
 from langport.routers.gateway.common import AppSettings
 

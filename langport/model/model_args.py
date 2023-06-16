@@ -36,3 +36,6 @@ def add_model_args(parser):
     parser.add_argument(
         "--deepspeed", action="store_true", help="Use deepspeed"
     )
+    parser.add_argument(
+        "--trust-remote-code", action="store_true", help="Trust remote code"
+    )

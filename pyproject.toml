@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "langport"
-version = "0.0.5"
+version = "0.1.0"
 description = "A large language model serving platform."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -21,6 +21,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["black==23.3.0", "pylint==2.8.2"]
+
+[project.optional-dependencies]
+llamacpp = ["llama-cpp-python"]
 
 [project.urls]
 "Homepage" = "https://github.com/vtuber-plan/langport"

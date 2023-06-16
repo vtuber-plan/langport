@@ -21,12 +21,18 @@ if __name__ == "__main__":
     add_model_args(parser)
     parser.add_argument("--model-name", type=str, help="Optional display name")
     parser.add_argument("--limit-model-concurrency", type=int, default=8)
-    parser.add_argument("--batch", type=int, default=4)
+    parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--stream-interval", type=int, default=2)
+
+    parser.add_argument("--n-ctx", type=int, default=2048)
+    parser.add_argument("--n-gpu-layers", type=int, default=24)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--n-batch", type=int, default=1024)
+    parser.add_argument("--last-n-tokens-size", type=int, default=1024)
     args = parser.parse_args()
 
     node_id = str(uuid.uuid4())
-    logger = build_logger("generation_worker", f"generation_worker_{node_id}.log")
+    logger = build_logger("ggml_generation_worker", f"ggml_generation_worker_{node_id}.log")
     logger.info(f"args: {args}")
 
     if args.gpus:
@@ -45,17 +51,15 @@ if __name__ == "__main__":
     if args.model_name is None:
         args.model_name = os.path.basename(os.path.normpath(args.model_path))
     
-    from langport.model.executor.generation.huggingface import HuggingfaceGenerationExecutor
-    executor = HuggingfaceGenerationExecutor(
+    from langport.model.executor.generation.llamacpp import LlamaCppGenerationExecutor
+    executor = LlamaCppGenerationExecutor(
         model_name=args.model_name,
         model_path=args.model_path,
-        device=args.device,
-        num_gpus=args.num_gpus,
-        max_gpu_memory=args.max_gpu_memory,
-        load_8bit=args.load_8bit,
-        cpu_offloading=args.cpu_offloading,
-        deepspeed=args.deepspeed,
-        trust_remote_code=args.trust_remote_code
+        n_ctx=args.n_ctx,
+        n_gpu_layers=args.n_gpu_layers,
+        seed=args.seed,
+        n_batch=args.n_batch,
+        last_n_tokens_size=args.last_n_tokens_size
     )
 
     app.node = GenerationModelWorker(

@@ -1,18 +1,14 @@
 import argparse
-import asyncio
 import json
 import logging
 
-from typing import Generator, Optional, Union, Dict, List, Any
+from typing import Optional, Union
 
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, DispatchFunction
-import httpx
-import numpy as np
 from starlette.types import ASGIApp
-from tenacity import retry, stop_after_attempt
 import uvicorn
 
 from langport.constants import ErrorCode
@@ -29,7 +25,7 @@ from langport.protocol.tabby_api_protocol import (
 )
 from langport.protocol.openai_api_protocol import CompletionRequest as OpenAICompletionRequest
 
-from langport.routers.gateway.common import AppSettings, _list_models, check_model, check_requests, create_error_response
+from langport.routers.gateway.common import AppSettings, check_model, create_error_response
 from langport.routers.gateway.openai_compatible import completions_non_stream, get_gen_params
 
 logger = logging.getLogger(__name__)

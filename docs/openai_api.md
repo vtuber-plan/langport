@@ -7,6 +7,25 @@ The following OpenAI APIs are supported:
 - Completions. (Reference: https://platform.openai.com/docs/api-reference/completions)
 - Embeddings. (Reference: https://platform.openai.com/docs/api-reference/embeddings)
 
+### Curl Test
+```shell
+curl -X 'POST' \
+  'http://localhost:8000/v1/chat/completions' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "openbuddy",
+    "stream": true,
+    "top_p": 0.5,
+    "temperature": 0.5,
+    "messages": [
+        {
+            "role": "user",
+            "content": "Hello! What is your name?"
+        }
+    ]
+}'
+```
 
 ### OpenAI Official SDK
 The goal of `openai_api_gateway.py` is to implement a fully OpenAI-compatible API server, so the models can be used directly with [openai-python](https://github.com/openai/openai-python) library.
@@ -88,3 +107,11 @@ Here we list the parameter compatibility of completions API.
         - [x] Nucleus-sampling (top-p)
         - [x] Stop sequences
         - [x] Presence and frequency penalties
+
+## Redirect Model Name
+
+By using the redirect arg, the model name passed to the API can be redirected to a specific model, which is often very helpful when reusing downstream applications under OpenAI.
+
+```shell
+python -m langport.service.gateway.openai_api --host 0.0.0.0 --redirect gpt-4:openbuddy --redirect gpt-3.5-turbo:openbuddy
+```

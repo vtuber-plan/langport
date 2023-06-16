@@ -9,9 +9,6 @@ class ClaudeAdapter(BaseAdapter):
     def match(self, model_path: str):
         return model_path == "claude-v1"
 
-    def load_model(self, model_path: str, from_pretrained_kwargs: dict):
-        raise NotImplementedError()
-
     def get_default_conv_template(self, model_path: str) -> ConversationHistory:
         settings = get_conv_settings("claude")
         return ConversationHistory(
