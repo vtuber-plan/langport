@@ -21,7 +21,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["black==23.3.0", "pylint==2.8.2"]
-llamacpp = ["llama-cpp-python"]
 ggml = ["ctransformers"]
 
 [project.urls]
