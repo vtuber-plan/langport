@@ -19,6 +19,8 @@ Our goal is to build a super fast LLM inference service.
 This project is inspired by [lmsys/fastchat](https://github.com/lm-sys/FastChat), we hope that the serving platform is lightweight and fast, but fastchat includes other features such as training and evaluation make it complicated.
 
 The core features include:
+- Huggingface transformers support.
+- ggml (llama.cpp) support.
 - A distributed serving system for state-of-the-art models.
 - Streaming generation support with various decoding strategies.
 - Batch inference for higher throughput.
@@ -36,6 +38,7 @@ We create 32 threads to submit chat tasks to the server, and the following figur
 
 
 ## News
+- [2023/06/18] Add ggml (llama.cpp gpt.cpp starcoder.cpp etc.) worker support.
 - [2023/06/09] Add LLama.cpp worker support.
 - [2023/06/01] Add HuggingFace Bert embedding worker support.
 - [2023/06/01] Add HuggingFace text generation API support.
@@ -51,18 +54,23 @@ We create 32 threads to submit chat tasks to the server, and the following figur
 ### Method 1: With pip
 
 ```bash
-pip3 install langport
+pip install langport
 ```
 
 or:
 
 ```bash
-pip3 install git+https://github.com/vtuber-plan/langport.git 
+pip install git+https://github.com/vtuber-plan/langport.git 
 ```
 
-If you need llamacpp generation worker, use this command:
+If you need ggml generation worker, use this command:
 ```bash
-pip3 install langport[llamacpp]
+pip install langport[ggml]
+```
+
+If you wanna use GPU:
+```bash
+CT_CUBLAS=1 pip install langport[ggml]
 ```
 
 ### Method 2: From source
@@ -114,10 +122,10 @@ python -m langport.service.server.generation_worker --port 21001 --model-path <y
 python -m langport.service.gateway.openai_api
 ```
 
-Run text generation with LLama.cpp worker:
+Run text generation with ggml worker:
 
 ```bash
-python -m langport.service.server.generation_worker --port 21001 --model-path <your model path> --n-gpu-layers <num layer to gpu (resize this for your VRAM)>
+python -m langport.service.server.generation_worker --port 21001 --model-path <your model path> --gpu-layers <num layer to gpu (resize this for your VRAM)>
 ```
 
 ## License
