@@ -1,17 +1,13 @@
 from typing import List, Optional
-
-from llama_cpp import Llama, LlamaTokenizer
-
-from langport.model.executor.llamacpp import LlamaCppExecutor
-from langport.model.model_adapter import get_model_adapter
-from langport.model.executor.base import BaseModelExecutor, LocalModelExecutor
+from langport.model.executor.ggml import GgmlExecutor, GgmlTokenizer
+from ctransformers import LLM
 from langport.protocol.worker_protocol import BaseWorkerResult, GenerationTask, GenerationWorkerResult, UsageInfo
 from langport.workers.generation_worker import GenerationModelWorker
 
 
-def batch_generation(
-    model: Llama,
-    tokenizer: LlamaTokenizer,
+def stream_generation(
+    model: LLM,
+    tokenizer: GgmlTokenizer,
     stream_interval: int,
     tasks: List[GenerationTask],
 ):
@@ -21,22 +17,25 @@ def batch_generation(
 
     # todo: add stop words support
     for i, task in enumerate(tasks):
-
         output = ""
 
         if task.echo:
             output = task.prompt
         else:
-            tokens = tokenizer.encode(" " + task.prompt + " ")
+            tokens = tokenizer.encode(task.prompt)
             prompt_length = len(tokens)
             output_ids = []
 
-            for j, token in enumerate(model.generate(tokens, top_k=40, top_p=task.top_p, 
-                                                  temp=task.temperature, repeat_penalty=1.17647)):
+            # Compatible with some models
+            top_k = 40 if task.top_k <= 1 else task.top_k
+            repetition_penalty = 1.17647 if task.repetition_penalty == 0.0 else task.repetition_penalty
+
+            for j, token in enumerate(model.generate(tokens, top_k=top_k, top_p=task.top_p,
+                                                  temperature=task.temperature, repetition_penalty=repetition_penalty)):
                 output_ids.append(token)
-                if token == model.token_eos() or len(tokens) + j == task.max_tokens - 1:
+                if tokenizer.is_eos_token(token) or prompt_length + j == task.max_tokens - 1:
                     output = tokenizer.decode(output_ids)
-                    if token == model.token_eos():
+                    if tokenizer.is_eos_token(token):
                         finish_reason = "stop"
                     else:
                         finish_reason = "length"
@@ -71,31 +70,29 @@ def batch_generation(
                 )
 
 
-class LlamaCppGenerationExecutor(LlamaCppExecutor):
+class GgmlGenerationExecutor(GgmlExecutor):
     def __init__(
         self,
         model_name: str,
         model_path: str,
-        n_ctx: int,
-        n_gpu_layers: int,
-        seed: int,
-        n_batch: int,
-        last_n_tokens_size: int
+        context_length: int,
+        gpu_layers: int,
+        model_type: str = "llama",
+        lib: Optional[str] = None,
     ) -> None:
-        super(LlamaCppGenerationExecutor, self).__init__(
+        n_gpu = 1 if gpu_layers > 0 else 0
+        super(GgmlGenerationExecutor, self).__init__(
             model_name=model_name,
             model_path=model_path,
             device="cpu",
-            num_gpus=1,
+            num_gpus=n_gpu,
             max_gpu_memory=None,
+            gpu_layers=gpu_layers,
+            lib=lib,
+            model_type=model_type,
         )
-        self.n_ctx = n_ctx
-        self.adapter = get_model_adapter(model_path)
-        self.model, self.tokenizer = self.load_model(model_path, {"n_ctx":n_ctx,
-                                                                          "n_gpu_layers":n_gpu_layers, 
-                                                                          "seed":seed, 
-                                                                          "n_batch":n_batch, 
-                                                                          "last_n_tokens_size":last_n_tokens_size,})
+        self.n_ctx = context_length
+        self.adapter, self.model, self.tokenizer = self.load_model(model_path, from_pretrained_kwargs={})
 
     @property
     def context_length(self) -> int:
@@ -114,7 +111,7 @@ class LlamaCppGenerationExecutor(LlamaCppExecutor):
             return
 
         # batch inference
-        for chunk in batch_generation(
+        for chunk in stream_generation(
             self.model,
             self.tokenizer,
             worker.stream_interval,

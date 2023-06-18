@@ -24,11 +24,10 @@ if __name__ == "__main__":
     parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--stream-interval", type=int, default=2)
 
-    parser.add_argument("--n-ctx", type=int, default=2048)
-    parser.add_argument("--n-gpu-layers", type=int, default=24)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--n-batch", type=int, default=1024)
-    parser.add_argument("--last-n-tokens-size", type=int, default=1024)
+    parser.add_argument("--context-length", type=int, default=2048)
+    parser.add_argument("--gpu-layers", type=int, default=0)
+    parser.add_argument("--lib", type=str, default=None, choices=["avx2", "avx", "basic"], help="The path to a shared library or one of avx2, avx, basic.")
+    parser.add_argument("--model-type", type=str, default="llama", choices=["llama", "gpt2", "dolly-v2", "starcoder"], help="The type of model to use.")
     args = parser.parse_args()
 
     node_id = str(uuid.uuid4())
@@ -51,15 +50,14 @@ if __name__ == "__main__":
     if args.model_name is None:
         args.model_name = os.path.basename(os.path.normpath(args.model_path))
     
-    from langport.model.executor.generation.llamacpp import LlamaCppGenerationExecutor
-    executor = LlamaCppGenerationExecutor(
+    from langport.model.executor.generation.ggml import GgmlGenerationExecutor
+    executor = GgmlGenerationExecutor(
         model_name=args.model_name,
         model_path=args.model_path,
-        n_ctx=args.n_ctx,
-        n_gpu_layers=args.n_gpu_layers,
-        seed=args.seed,
-        n_batch=args.n_batch,
-        last_n_tokens_size=args.last_n_tokens_size
+        context_length=args.context_length,
+        gpu_layers=args.gpu_layers,
+        lib=args.lib,
+        model_type=args.model_type,
     )
 
     app.node = GenerationModelWorker(
