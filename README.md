@@ -125,7 +125,7 @@ python -m langport.service.gateway.openai_api
 Run text generation with ggml worker:
 
 ```bash
-python -m langport.service.server.generation_worker --port 21001 --model-path <your model path> --gpu-layers <num layer to gpu (resize this for your VRAM)>
+python -m langport.service.server.ggml_generation_worker --port 21001 --model-path <your model path> --gpu-layers <num layer to gpu (resize this for your VRAM)>
 ```
 
 ## License
