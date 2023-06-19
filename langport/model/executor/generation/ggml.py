@@ -118,18 +118,19 @@ class GgmlGenerationExecutor(GgmlExecutor):
         self.lock.acquire()
 
         # batch inference
-        for chunk in stream_generation(
-            self.model,
-            self.tokenizer,
-            worker.stream_interval,
-            tasks,
-        ):
-            worker.push_task_result(chunk.task_id, chunk)
+        try:
+            for chunk in stream_generation(
+                self.model,
+                self.tokenizer,
+                worker.stream_interval,
+                tasks,
+            ):
+                worker.push_task_result(chunk.task_id, chunk)
 
-        for task in tasks:
-            worker.push_task_result(
-                task.task_id, BaseWorkerResult(task_id=task.task_id, type="done")
-            )
-        
-        self.lock.release()
+            for task in tasks:
+                worker.push_task_result(
+                    task.task_id, BaseWorkerResult(task_id=task.task_id, type="done")
+                )
+        finally:
+            self.lock.release()
     
