@@ -151,7 +151,7 @@ class BatchingTask:
                 self.set_stop(i)
             if self.tasks[i].stop_token_ids is not None and token in self.tasks[i].stop_token_ids:
                 self.set_stop(i)
-            if self.get_prompt_length(i) + self.get_generated_length(i) >= self.max_tokens[i]:
+            if self.get_generated_length(i) == self.max_tokens[i]:
                 self.set_stop(i)
                 
     def set_stop(self, idx:int):
