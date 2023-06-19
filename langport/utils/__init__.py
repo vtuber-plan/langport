@@ -48,7 +48,7 @@ def build_logger(logger_name, logger_filename) -> logging.Logger:
 
     # Redirect stdout and stderr to loggers
     stdout_logger = logging.getLogger("stdout")
-    stdout_logger.setLevel(logging.INFO)
+    stdout_logger.setLevel(logging.DEBUG)
     sl = StreamToLogger(stdout_logger, logging.INFO)
     sys.stdout = sl
 
@@ -59,7 +59,7 @@ def build_logger(logger_name, logger_filename) -> logging.Logger:
 
     # Get logger
     logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
     # Add a file handler for all loggers
     if handler is None:

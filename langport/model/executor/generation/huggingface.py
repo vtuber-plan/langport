@@ -208,6 +208,7 @@ class GenerationModel:
             else:
                 out = self.model(
                     input_ids=decoder_input_ids,
+                    attention_mask=torch.ones_like(decoder_input_ids, dtype=torch.long, device=decoder_input_ids.device),
                     use_cache=self.model.generation_config.use_cache,
                     past_key_values=past_key_values,
                 )
