@@ -52,7 +52,7 @@ class RedirectModelMiddleware(BaseHTTPMiddleware):
         self.receive_ = None
 
     async def dispatch(self, request, call_next):
-        if "content-type" not in request.headers or request.headers["content-type"] != "application/json":
+        if "content-type" not in request.headers or "application/json" not in request.headers["content-type"]:
             return await call_next(request)
         
         try:
