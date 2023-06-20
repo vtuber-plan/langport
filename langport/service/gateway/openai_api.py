@@ -44,36 +44,16 @@ class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
             )
         return await call_next(request)
 
-
-class RedirectModelMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: ASGIApp,  redirect_rules:list, dispatch: Optional[DispatchFunction] = None) -> None:
-        super().__init__(app, dispatch)
-        self.redirect_rules = redirect_rules
-        self.receive_ = None
-
-    async def dispatch(self, request, call_next):
-        if "content-type" not in request.headers or "application/json" not in request.headers["content-type"]:
-            return await call_next(request)
-        
-        try:
-            await self.set_body(request)
-            data = await request.json()
-            if "model" in data:
-                for rule in self.redirect_rules:
-                    from_model_name, to_model_name = rule.split(":")
-                    if data["model"] == from_model_name:
-                        data["model"] = to_model_name
-                        self.receive_['body'] = json.dumps(data).encode("utf-8")
-                        break
-        except Exception as e:
-            logger.error(f"RedirectModelMiddleware: {e}")
-        return await call_next(request)
-    
-    async def set_body(self, request):
-        self.receive_ = await request._receive()
-        async def receive():
-            return self.receive_
-        request._receive = receive
+redirect_rules = None
+def redirect_model_name(model:str):
+    if redirect_rules is not None:
+        for rule in redirect_rules:
+            from_model_name, to_model_name = rule.split(":")
+            if model == from_model_name:
+                logger.debug(f"Redirect model {from_model_name} to {to_model_name}")
+                model = to_model_name
+                break
+    return model
 
 
 @app.exception_handler(RequestValidationError)
@@ -88,15 +68,18 @@ async def models():
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
+    request.model = redirect_model_name(request.model)
     return await api_chat_completions(app.app_settings, request)
 
 @app.post("/v1/completions")
 async def completions(request: CompletionRequest):
+    request.model = redirect_model_name(request.model)
     return await api_completions(app.app_settings, request)
 
 
 @app.post("/v1/embeddings")
 async def embeddings(request: EmbeddingsRequest):
+    request.model = redirect_model_name(request.model)
     return await api_embeddings(app.app_settings, request)
 
 
@@ -133,10 +116,7 @@ if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
         allow_headers=args.allowed_headers,
     )
     if args.redirect is not None:
-        app.add_middleware(
-            RedirectModelMiddleware,
-            redirect_rules=args.redirect,
-        )
+        redirect_rules = args.redirect
     if args.sk is not None:
         app.add_middleware(
             BaseAuthorizationMiddleware,
@@ -153,5 +133,5 @@ if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
             host=args.host,
             port=args.port,
             log_level="info",
-            reload=True,
+            reload=False,
         )
