@@ -37,7 +37,7 @@ class OptimumExecutor(LocalModelExecutor):
         else:
             export_onnx = True
         
-        use_gpu = self.device == "cuda"
+        use_gpu = False # self.device == "cuda"
         if use_gpu:
             provider = "CUDAExecutionProvider"
         else:

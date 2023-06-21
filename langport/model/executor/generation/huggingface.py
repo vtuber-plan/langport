@@ -206,12 +206,19 @@ class GenerationModel:
                     past_key_values=past_key_values,
                 )
             else:
+                if step > 0:
+                    dynamic_attention_mask = torch.cat(
+                        (attention_mask, 
+                        torch.ones(
+                            inputs.batch_size, step,
+                            dtype=torch.long, device=decoder_input_ids.device
+                        )), dim=1
+                    )
+                else:
+                    dynamic_attention_mask = attention_mask
                 out = self.model(
                     input_ids=decoder_input_ids,
-                    attention_mask=torch.ones(
-                        inputs.batch_size, full_input_ids.shape[1] + step,
-                        dtype=torch.long, device=decoder_input_ids.device
-                    ),
+                    attention_mask=dynamic_attention_mask,
                     use_cache=self.model.generation_config.use_cache,
                     past_key_values=past_key_values,
                 )
