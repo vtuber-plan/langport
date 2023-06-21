@@ -1,3 +1,4 @@
+import threading
 from typing import List, Optional
 from langport.model.executor.ggml import GgmlExecutor, GgmlTokenizer
 from ctransformers import LLM
@@ -30,29 +31,30 @@ def stream_generation(
             top_k = 40 if task.top_k <= 1 else task.top_k
             repetition_penalty = 1.17647 if task.repetition_penalty == 0.0 else task.repetition_penalty
 
-            for j, token in enumerate(model.generate(tokens, top_k=top_k, top_p=task.top_p,
-                                                  temperature=task.temperature, repetition_penalty=repetition_penalty)):
+            finish_reason = "stop"
+            n_tokens = 0
+            for token in model.generate(
+                            tokens, top_k=top_k, top_p=task.top_p, batch_size=512,
+                            temperature=task.temperature, repetition_penalty=repetition_penalty):
+                n_tokens += 1
                 output_ids.append(token)
-                if tokenizer.is_eos_token(token) or prompt_length + j == task.max_tokens - 1:
+                if n_tokens == task.max_tokens:
                     output = tokenizer.decode(output_ids)
-                    if tokenizer.is_eos_token(token):
-                        finish_reason = "stop"
-                    else:
-                        finish_reason = "length"
+                    finish_reason = "length"
                     yield GenerationWorkerResult(
                         task_id=task.task_id,
                         type="finish",
                         text=output,
                         usage=UsageInfo(
                             prompt_tokens=prompt_length,
-                            total_tokens=prompt_length + j,
-                            completion_tokens=j,
+                            total_tokens=prompt_length + n_tokens,
+                            completion_tokens=n_tokens,
                         ),
                         finish_reason=finish_reason,
                     )
                     break
 
-                if j%stream_interval!=0:
+                if n_tokens % stream_interval != 0:
                     continue
                 output = tokenizer.decode(output_ids)
 
@@ -63,10 +65,25 @@ def stream_generation(
                     text=output,
                     usage=UsageInfo(
                         prompt_tokens=prompt_length,
-                        total_tokens=prompt_length + j,
-                        completion_tokens=j,
+                        total_tokens=prompt_length + n_tokens,
+                        completion_tokens=n_tokens,
                     ),
                     finish_reason=None,
+                )
+
+            # token == eos is checked in model.generate
+            if finish_reason == "stop":
+                output = tokenizer.decode(output_ids)
+                yield GenerationWorkerResult(
+                    task_id=task.task_id,
+                    type="finish",
+                    text=output,
+                    usage=UsageInfo(
+                        prompt_tokens=prompt_length,
+                        total_tokens=prompt_length + n_tokens,
+                        completion_tokens=n_tokens,
+                    ),
+                    finish_reason="stop",
                 )
 
 
@@ -93,6 +110,7 @@ class GgmlGenerationExecutor(GgmlExecutor):
         )
         self.n_ctx = context_length
         self.adapter, self.model, self.tokenizer = self.load_model(model_path, from_pretrained_kwargs={})
+        self.lock = threading.Lock()
 
     @property
     def context_length(self) -> int:
@@ -109,18 +127,23 @@ class GgmlGenerationExecutor(GgmlExecutor):
         batch_size = len(tasks)
         if batch_size == 0:
             return
+        
+        self.lock.acquire()
 
         # batch inference
-        for chunk in stream_generation(
-            self.model,
-            self.tokenizer,
-            worker.stream_interval,
-            tasks,
-        ):
-            worker.push_task_result(chunk.task_id, chunk)
+        try:
+            for chunk in stream_generation(
+                self.model,
+                self.tokenizer,
+                worker.stream_interval,
+                tasks,
+            ):
+                worker.push_task_result(chunk.task_id, chunk)
 
-        for task in tasks:
-            worker.push_task_result(
-                task.task_id, BaseWorkerResult(task_id=task.task_id, type="done")
-            )
+            for task in tasks:
+                worker.push_task_result(
+                    task.task_id, BaseWorkerResult(task_id=task.task_id, type="done")
+                )
+        finally:
+            self.lock.release()
     
