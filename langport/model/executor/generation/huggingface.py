@@ -151,7 +151,7 @@ class BatchingTask:
                 self.set_stop(i)
             if self.tasks[i].stop_token_ids is not None and token in self.tasks[i].stop_token_ids:
                 self.set_stop(i)
-            if self.get_prompt_length(i) + self.get_generated_length(i) >= self.max_tokens[i]:
+            if self.get_generated_length(i) == self.max_tokens[i]:
                 self.set_stop(i)
                 
     def set_stop(self, idx:int):
@@ -271,7 +271,11 @@ class GenerationModel:
 
             if all(inputs.stop):
                 break
-
+        
+        # stop all
+        for i in range(inputs.batch_size):
+            if not inputs.is_stop(i):
+                inputs.set_stop(i)
         if streamer:
             streamer.end()
 
@@ -303,7 +307,7 @@ class GenerationWorkerStreamer(BaseStreamer):
             prompt_len = self.task_batch.get_prompt_length(i)
 
             if self.task_batch.is_stop(i):
-                if prompt_len + generated_len >= self.task_batch.max_tokens[i]:
+                if generated_len == self.task_batch.max_tokens[i]:
                     finish_reason = "length"
                 else:
                     finish_reason = "stop"
@@ -340,7 +344,8 @@ class GenerationWorkerStreamer(BaseStreamer):
                 )
 
     def end(self):
-        pass
+        # check all done
+        self.put(None)
             
 
 def stop_by_stopwords(
