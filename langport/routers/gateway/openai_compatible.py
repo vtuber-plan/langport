@@ -69,7 +69,7 @@ def get_gen_params(
     stream: Optional[bool],
     stop: Optional[Union[str, List[str]]],
 ) -> Dict[str, Any]:
-    is_chatglm = "chatglm" in model_name.lower()
+    # is_chatglm = "chatglm" in model_name.lower()
     conv = get_conversation_template(model_name)
 
     if isinstance(messages, str):
@@ -88,11 +88,7 @@ def get_gen_params(
 
         # Add a blank message for the assistant.
         conv.append_message(conv.settings.roles[1], None)
-
-        if is_chatglm:
-            prompt = conv.messages[conv.offset :]
-        else:
-            prompt = conv.get_prompt()
+        prompt = conv.get_prompt()
 
     if max_tokens is None:
         max_tokens = 512
