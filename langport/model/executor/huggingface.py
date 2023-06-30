@@ -79,7 +79,8 @@ class HuggingfaceExecutor(LocalModelExecutor):
             model = BertModel.from_pretrained(model_path, **from_pretrained_kwargs)
 
         else:
-            tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
+            trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
+            tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, trust_remote_code=trust_remote_code)
             model = AutoModelForCausalLM.from_pretrained(
                 model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
             )

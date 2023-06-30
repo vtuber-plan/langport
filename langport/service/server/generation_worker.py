@@ -57,7 +57,7 @@ if __name__ == "__main__":
         deepspeed=args.deepspeed,
         trust_remote_code=args.trust_remote_code
     )
-
+    
     app.node = GenerationModelWorker(
         node_addr=args.worker_address,
         node_id=node_id,

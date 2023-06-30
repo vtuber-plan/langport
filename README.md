@@ -43,9 +43,11 @@ The core features include:
 * LLaMa
 * Vicuna
 * ChatGLM
+* ChatGLM2
 * Falcon
 * Starcoder
 * WizardLM
+* OpenBuddy
 
 ## Benchmark
 We use single RTX3090 to run a finetuned 7B LLaMA model (OpenBuddy V0.9) under the bf16 setting.
