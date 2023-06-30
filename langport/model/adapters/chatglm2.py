@@ -1,8 +1,3 @@
-from transformers import (
-    AutoModel,
-    AutoTokenizer,
-)
-
 from langport.model.model_adapter import BaseAdapter
 
 class ChatGLMAdapter(BaseAdapter):

@@ -4,12 +4,15 @@ from langport.model.adapters.dolly_v2 import DollyV2Adapter
 from langport.model.adapters.rwkv import RwkvAdapter
 from langport.model.adapters.t5 import T5Adapter
 from langport.model.adapters.text2vec import BertAdapter
+from langport.model.adapters.chatglm2 import ChatGLMAdapter
+
 from langport.model.executor.base import LocalModelExecutor
 
 import torch
 
 from transformers import (
     AutoModelForCausalLM,
+    AutoModel,
     AutoTokenizer,
     AutoModelForSeq2SeqLM,
     T5Tokenizer,
@@ -77,7 +80,13 @@ class HuggingfaceExecutor(LocalModelExecutor):
         elif isinstance(adapter, BertAdapter):
             tokenizer = BertTokenizer.from_pretrained(model_path)
             model = BertModel.from_pretrained(model_path, **from_pretrained_kwargs)
-
+        elif isinstance(adapter, ChatGLMAdapter):
+            tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, trust_remote_code=True)
+            if "trust_remote_code" in from_pretrained_kwargs:
+                from_pretrained_kwargs.pop("trust_remote_code")
+            model = AutoModel.from_pretrained(
+                model_path, low_cpu_mem_usage=True, trust_remote_code=True, **from_pretrained_kwargs
+            )
         else:
             trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
             tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, trust_remote_code=trust_remote_code)
