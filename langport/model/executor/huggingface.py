@@ -4,7 +4,7 @@ from langport.model.adapters.dolly_v2 import DollyV2Adapter
 from langport.model.adapters.rwkv import RwkvAdapter
 from langport.model.adapters.t5 import T5Adapter
 from langport.model.adapters.text2vec import BertAdapter
-from langport.model.adapters.chatglm2 import ChatGLMAdapter
+from langport.model.adapters.chatglm import ChatGLMAdapter
 
 from langport.model.executor.base import LocalModelExecutor
 

@@ -19,6 +19,7 @@ class SeparatorStyle(Enum):
     DOLLY = auto()
     RWKV = auto()
     PHOENIX = auto()
+    CHATGLM = auto()
 
 
 @dataclasses.dataclass
@@ -127,6 +128,16 @@ class ConversationHistory:
                     ret += role + ": " + "<s>" + message + "</s>"
                 else:
                     ret += role + ": " + "<s>"
+            return ret
+        elif self.settings.sep_style == SeparatorStyle.CHATGLM:
+            ret = self.system
+            for i, (role, message) in enumerate(self.messages):
+                if message:
+                    if i % 2 == 0:
+                        ret += f"[Round {i+1}]\n\n"
+                    ret += role + "：" + message + self.settings.sep
+                else:
+                    ret += role + "："
             return ret
         else:
             raise ValueError(f"Invalid style: {self.settings.sep_style}")
