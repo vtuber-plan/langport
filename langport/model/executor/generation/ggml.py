@@ -28,14 +28,16 @@ def stream_generation(
             output_ids = []
 
             # Compatible with some models
-            top_k = 40 if task.top_k <= 1 else task.top_k
-            repetition_penalty = 1.17647 if task.repetition_penalty == 0.0 else task.repetition_penalty
+            top_k = 10 if task.top_k <= 1 else task.top_k
+            repetition_penalty = 1.01 if task.repetition_penalty == 0.0 else task.repetition_penalty
+            model.config.max_new_tokens = task.max_tokens
 
             finish_reason = "stop"
             n_tokens = 0
             for token in model.generate(
-                            tokens, top_k=top_k, top_p=task.top_p, batch_size=512,
-                            temperature=task.temperature, repetition_penalty=repetition_penalty):
+                            tokens, top_k=top_k, top_p=task.top_p, batch_size=model.config.batch_size,
+                            threads=model.config.threads, temperature=task.temperature, 
+                            last_n_tokens=256, repetition_penalty=repetition_penalty, reset=True):
                 n_tokens += 1
                 output_ids.append(token)
                 if n_tokens == task.max_tokens:
@@ -94,6 +96,8 @@ class GgmlGenerationExecutor(GgmlExecutor):
         model_path: str,
         context_length: int,
         gpu_layers: int,
+        chunk_size: int,
+        threads: int,
         model_type: str = "llama",
         lib: Optional[str] = None,
     ) -> None:
@@ -105,6 +109,8 @@ class GgmlGenerationExecutor(GgmlExecutor):
             num_gpus=n_gpu,
             max_gpu_memory=None,
             gpu_layers=gpu_layers,
+            chunk_size=chunk_size,
+            threads=threads,
             lib=lib,
             model_type=model_type,
         )

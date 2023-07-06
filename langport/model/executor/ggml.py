@@ -28,6 +28,8 @@ class GgmlExecutor(LocalModelExecutor):
         lib: Optional[str] = None,
         gpu_layers: int = 0,
         model_type: str = 'llama',
+        chunk_size: int = 1024,
+        threads: int = -1,
         load_8bit: bool = False,
         cpu_offloading: bool = False,
     ) -> None:
@@ -44,6 +46,8 @@ class GgmlExecutor(LocalModelExecutor):
         # ctransformers has a bug
         self.lib = lib
         self.model_type = model_type
+        self.chunk_size = chunk_size
+        self.threads = threads
  
 
     def load_model(self, model_path: str, from_pretrained_kwargs: dict):
@@ -51,6 +55,8 @@ class GgmlExecutor(LocalModelExecutor):
         config = Config()
         setattr(config, 'stream', True)
         setattr(config, 'gpu_layers', self.gpu_layers)
+        setattr(config, 'batch_size', self.chunk_size)
+        setattr(config, 'threads', self.threads)
         auto_config = AutoConfig(config=config, model_type=self.model_type)
         model = AutoModelForCausalLM.from_pretrained(model_path,
                                                    config=auto_config,
