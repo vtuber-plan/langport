@@ -8,19 +8,19 @@ import tqdm
 import datasets
 from concurrent.futures import ThreadPoolExecutor
 
-def start_session(i: int, url: str, model: str, dataset, stream: bool=False, max_tokens: int=2048, random_len: int=0) -> str:
+def start_session(i: int, url: str, model: str, dataset, stream: bool=False, max_tokens: int=2048) -> str:
   try:
     openai.api_key = "EMPTY" # Not support yet
     openai.api_base = url
 
-    messages = dataset[i]
-
+    prompt = dataset[i]
     # create a chat completion
-    response = openai.ChatCompletion.create(
+    response = openai.Completion.create(
       model=model,
-      messages=messages,
+      prompt=prompt,
       stream=stream,
       max_tokens=max_tokens,
+      temperature=0.9,
     )
     # print the completion
     if stream:
@@ -28,7 +28,7 @@ def start_session(i: int, url: str, model: str, dataset, stream: bool=False, max
       for chunk in response:
         out += str(chunk)
     else:
-      out = response.choices[0].message.content
+      out = response.choices[0].text
       total_tokens = response.usage.total_tokens
       completion_tokens = response.usage.completion_tokens
   except Exception as e:
@@ -36,7 +36,6 @@ def start_session(i: int, url: str, model: str, dataset, stream: bool=False, max
     return "", 0, 0
   
   return out, total_tokens, completion_tokens
-
 
 def get_prompt(raw_dataset):
     dataset = []
@@ -58,7 +57,7 @@ def get_prompt(raw_dataset):
         prompt = "\n###".join([msg["role"] + ": " + msg["content"] for msg in messages]) + "\n### assistant: "
         if len(prompt) > 2048:
            continue
-        dataset.append(messages)
+        dataset.append(prompt)
     return dataset
 
 def main(args):
@@ -69,7 +68,7 @@ def main(args):
   tasks = []
   with ThreadPoolExecutor(max_workers=args.n_thread) as t:
     for i in range(args.total_task):
-      task = t.submit(start_session, i=i, url=args.url, model=args.model_name, dataset=dataset, stream=False, max_tokens=args.max_tokens, random_len=args.random_len)
+      task = t.submit(start_session, i=i, url=args.url, model=args.model_name, dataset=dataset, stream=False, max_tokens=args.max_tokens)
       tasks.append(task)
     
     results = []
@@ -91,9 +90,8 @@ if __name__ == "__main__":
     parser.add_argument("--url", type=str, default="http://localhost:8000/v1")
     parser.add_argument("--model-name", type=str, default="vicuna")
     parser.add_argument("--max-tokens", type=int, default=512)
-    parser.add_argument("--total-task", type=int, default=200)
-    parser.add_argument("--n-thread", type=int, default=32)
-    parser.add_argument("--random-len", type=int, default=0)
+    parser.add_argument("--total-task", type=int, default=64)
+    parser.add_argument("--n-thread", type=int, default=4)
     args = parser.parse_args()
 
     main(args)

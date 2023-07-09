@@ -30,12 +30,30 @@ The core features include:
 - HuggingFace-compatible RESTful APIs.
 - Tabby-compatible RESTful APIs.
 
+## Support Model Architectures
+* LLaMa
+* GLM
+* Bloom
+* OPT
+* GPT2
+* GPT Neo
+* GPT Big Code
+
+## Tested Models
+* LLaMa
+* Vicuna
+* ChatGLM
+* ChatGLM2
+* Falcon
+* Starcoder
+* WizardLM
+* OpenBuddy
+
 ## Benchmark
 We use single RTX3090 to run a finetuned 7B LLaMA model (OpenBuddy V0.9) under the bf16 setting.
 We create 32 threads to submit chat tasks to the server, and the following figure shows the Queries Per Second (QPS) and Tokens Per Second (TPS) of FastChat and LangPort with different max model concurrency settings.
 
 ![benchmark_chat](assets/benchmark_chat.jpg)
-
 
 ## News
 - [2023/06/18] Add ggml (llama.cpp gpt.cpp starcoder.cpp etc.) worker support.
