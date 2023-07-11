@@ -44,7 +44,11 @@ class CLinear(nn.Module):
 
     def forward(self, input: Tensor) -> Tensor:
         weight = decompress(self.weight, default_compression_config)
-        return F.linear(input.to(weight.dtype), weight, self.bias)
+        if self.bias is not None:
+            bias = self.bias.to(weight.dtype)
+        else:
+            bias = self.bias
+        return F.linear(input.to(weight.dtype), weight, bias)
 
 
 def compress_module(module, target_device):
