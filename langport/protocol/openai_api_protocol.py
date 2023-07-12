@@ -130,10 +130,16 @@ class CompletionRequest(BaseModel):
     user: Optional[str] = None
 
 
+class CompletionLogprobs(BaseModel):
+    tokens: List[str]
+    token_logprobs: List[float]
+    top_logprobs: List[Dict[str, float]]
+    text_offset: List[int]
+
 class CompletionResponseChoice(BaseModel):
     index: int
     text: str
-    logprobs: Optional[int] = None
+    logprobs: Optional[CompletionLogprobs] = None
     finish_reason: Optional[Literal["stop", "length"]]
 
 
@@ -149,7 +155,7 @@ class CompletionResponse(BaseModel):
 class CompletionResponseStreamChoice(BaseModel):
     index: int
     text: str
-    logprobs: Optional[float] = None
+    logprobs: Optional[CompletionLogprobs] = None
     finish_reason: Optional[Literal["stop", "length"]] = None
 
 

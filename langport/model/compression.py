@@ -142,7 +142,6 @@ def load_compress_model(model_path, device, torch_dtype):
 
     return model, tokenizer
 
-
 def compress(tensor, config):
     """Simulate group-wise quantization."""
     if not config.enabled:
@@ -194,7 +193,6 @@ def compress(tensor, config):
 
         data = data.clamp_(0, B).round_().to(torch.uint8)
         return data, mn, scale, original_shape
-
 
 def decompress(packed_data, config):
     """Simulate group-wise dequantization."""

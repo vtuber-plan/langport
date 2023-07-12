@@ -1,4 +1,4 @@
-from typing import Any, Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 from langport.model.executor.generation import BaseStreamer
 
 from langport.model.executor.huggingface import HuggingfaceExecutor
@@ -6,6 +6,7 @@ from langport.model.executor.huggingface import HuggingfaceExecutor
 from langport.protocol.worker_protocol import (
     BaseWorkerResult,
     GenerationTask,
+    GenerationWorkerLogprobs,
     GenerationWorkerResult,
     UsageInfo,
 )
@@ -29,6 +30,12 @@ from asyncache import cached
 from typing import Optional
 
 import torch
+
+def token_to_unicode(token: str) -> str:
+    utf8_bytes = token.encode("utf-8")
+    # Convert the bytes to a string with \\x escape sequences
+    escaped_bytes = "".join([f"\\x{b:02x}" for b in utf8_bytes])
+    return escaped_bytes
 
 @cached(LRUCache(maxsize=64))
 def prepare_logits_processor(
@@ -79,6 +86,8 @@ class BatchingTask:
         
         # variables used in the streaming process
         self.batch_tokens_cache: List[List[int]] = [[] for i in range(self.batch_size)]
+        self.batch_tokens_probs_cache: List[List[float]] = [[] for i in range(self.batch_size)]
+        self.batch_top_logprobs_cache: List[List[Dict[str, float]]] = [[] for i in range(self.batch_size)]
         self.stop = [False for i in range(self.batch_size)]
 
     def __len__(self):
@@ -132,15 +141,31 @@ class BatchingTask:
         self._check_idx(idx)
         return self.logits_processor_list[idx]
     
-    def get_generated_ids(self, idx:int) -> List[int]:
+    def get_generated_ids(self, idx: int) -> List[int]:
         self._check_idx(idx)
         return self.batch_tokens_cache[idx]
     
-    def get_generated_length(self, idx:int) -> int:
+    def get_generated_length(self, idx: int) -> int:
         return len(self.get_generated_ids(idx))
     
-    def update_new_token(self, batch_token: List[int]):
+    def get_generated_token_probs(self, idx: int) -> List[float]:
+        self._check_idx(idx)
+        return self.batch_tokens_probs_cache[idx]
+    
+    def get_generated_top_logprobs(self, idx: int) -> List[Dict[int, float]]:
+        self._check_idx(idx)
+        return self.batch_top_logprobs_cache[idx]
+    
+    def update_new_token(self, batch_token: List[int],
+            token_probs: Optional[List[float]]=None,
+            top_logprobs: Optional[List[Dict[int, float]]]=None
+        ):
         self._check_batch_size(batch_token)
+        if token_probs is not None:
+            self._check_batch_size(token_probs)
+        if top_logprobs is not None:
+            self._check_batch_size(top_logprobs)
+        
         for i, token in enumerate(batch_token):
             if self.is_stop(i):
                 continue
@@ -153,6 +178,11 @@ class BatchingTask:
                 self.set_stop(i)
             if self.get_generated_length(i) == self.max_tokens[i]:
                 self.set_stop(i)
+            
+            if token_probs is not None:
+                self.batch_tokens_probs_cache[i].append(token_probs[i])
+            if top_logprobs is not None:
+                self.batch_top_logprobs_cache[i].append(top_logprobs[i])
                 
     def set_stop(self, idx:int):
         self._check_idx(idx)
@@ -227,6 +257,9 @@ class GenerationModel:
             decoder_input_ids_list = []
 
             new_ids = []
+            # logprobs
+            token_probs = []
+            top_logprobs = []
 
             for i, task in enumerate(inputs.tasks):
                 if inputs.is_stop(i):
@@ -253,10 +286,20 @@ class GenerationModel:
                 else:
                     probs = torch.softmax(last_token_logits, dim=-1)
                     token = int(torch.multinomial(probs, num_samples=1))
+                
+                if task.logprobs is not None:
+                    token_probs.append(last_token_logits[token])
+                    values, indices = torch.topk(last_token_logits, task.logprobs, dim=-1, largest=True, sorted=True)
+                    item = {}
+                    for i in range(len(values)):
+                        item[indices[i].item()] = values[i].item()
+                    top_logprobs.append(item)
                 new_ids.append(token)
             
             # update state
-            inputs.update_new_token(new_ids)
+            if len(token_probs) == 0: token_probs = None
+            if len(top_logprobs) == 0: top_logprobs = None
+            inputs.update_new_token(new_ids, token_probs=token_probs, top_logprobs=top_logprobs)
             if streamer:
                 streamer.put(new_ids)
 
@@ -299,12 +342,61 @@ class GenerationWorkerStreamer(BaseStreamer):
             if (self.done[i] or generated_len % self.stream_interval != 0) and self.done[i]==self.task_batch.is_stop(i):
                 continue
             task = self.task_batch.tasks[i]
-            text = self.tokenizer.decode(self.task_batch.get_generated_ids(i), skip_special_tokens=True)
+
+            token_ids = self.task_batch.get_generated_ids(i)
+
+            # text = self.tokenizer.decode(token_ids, skip_special_tokens=True)
+            tokens = self.tokenizer.convert_ids_to_tokens(token_ids)
+            text = self.tokenizer.convert_tokens_to_string(tokens)
+
+            # get offset mapping from token to text
+            text_offset = []
+            for token_i in range(0, len(tokens)):
+                if token_i == 0:
+                    text_offset.append(-1)
+                    continue
+                prefix_text = self.tokenizer.convert_tokens_to_string(tokens[:token_i])
+                if text.startswith(prefix_text):
+                    text_offset.append(len(prefix_text))
+                else:
+                    text_offset.append(-1)
+            
+            last_id = len(text)
+            for token_i in reversed(range(0, len(tokens))):
+                if text_offset[token_i] == -1:
+                    text_offset[token_i] = last_id
+                else:
+                    last_id = text_offset[token_i]
+
+            # remove stop words
             stop_pos = stop_by_stopwords(text, 0, task.stop)
             if stop_pos != -1:
+                token_stop_pos = len(tokens)
+                for token_i in reversed(range(0, len(text_offset))):
+                    if text_offset[i] < stop_pos:
+                        token_stop_pos = token_i
+                        break
+    
                 self.task_batch.set_stop(i)
                 text = text[:stop_pos]
+                tokens = tokens[:token_stop_pos]
+            
             prompt_len = self.task_batch.get_prompt_length(i)
+            
+            # logprobs
+            if self.task_batch.tasks[i].logprobs is not None:
+                top_logprobs_new = []
+                top_logprobs = self.task_batch.get_generated_top_logprobs(i)
+                for prob in top_logprobs:
+                    top_logprobs_new.append({str(k): v for k, v in prob.items()})
+                logprobs = GenerationWorkerLogprobs(
+                    tokens=[str(id) for id in token_ids],
+                    token_logprobs=self.task_batch.get_generated_token_probs(i),
+                    top_logprobs=top_logprobs_new,
+                    text_offset=text_offset,
+                )
+            else:
+                logprobs = None
 
             if self.task_batch.is_stop(i):
                 if generated_len == self.task_batch.max_tokens[i]:
@@ -321,6 +413,7 @@ class GenerationWorkerStreamer(BaseStreamer):
                             total_tokens=prompt_len + generated_len,
                             completion_tokens=generated_len,
                         ),
+                        logprobs=logprobs,
                         finish_reason=finish_reason,
                     )
                 )
@@ -339,6 +432,7 @@ class GenerationWorkerStreamer(BaseStreamer):
                             total_tokens=prompt_len + generated_len,
                             completion_tokens=generated_len,
                         ),
+                        logprobs=logprobs,
                         finish_reason=None,
                     )
                 )
