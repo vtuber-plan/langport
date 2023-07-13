@@ -56,6 +56,7 @@ We create 32 threads to submit chat tasks to the server, and the following figur
 ![benchmark_chat](assets/benchmark_chat.jpg)
 
 ## News
+- [2023/07/13] Support generation logprobs parameter.
 - [2023/06/18] Add ggml (llama.cpp gpt.cpp starcoder.cpp etc.) worker support.
 - [2023/06/09] Add LLama.cpp worker support.
 - [2023/06/01] Add HuggingFace Bert embedding worker support.

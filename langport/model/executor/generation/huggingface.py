@@ -288,8 +288,8 @@ class GenerationModel:
                     token = int(torch.multinomial(probs, num_samples=1))
                 
                 if task.logprobs is not None:
-                    token_probs.append(last_token_logits[token])
-                    values, indices = torch.topk(last_token_logits, task.logprobs, dim=-1, largest=True, sorted=True)
+                    token_probs.append(each_logits[0, token].item())
+                    values, indices = torch.topk(each_logits[0, :], task.logprobs, dim=-1, largest=True, sorted=True)
                     item = {}
                     for i in range(len(values)):
                         item[indices[i].item()] = values[i].item()
@@ -388,16 +388,17 @@ class GenerationWorkerStreamer(BaseStreamer):
                 top_logprobs_new = []
                 top_logprobs = self.task_batch.get_generated_top_logprobs(i)
                 for prob in top_logprobs:
-                    top_logprobs_new.append({str(k): v for k, v in prob.items()})
+                    top_logprobs_new.append({self.tokenizer.convert_ids_to_tokens(k): v for k, v in prob.items()})
                 logprobs = GenerationWorkerLogprobs(
-                    tokens=[str(id) for id in token_ids],
+                    tokens=tokens,
                     token_logprobs=self.task_batch.get_generated_token_probs(i),
                     top_logprobs=top_logprobs_new,
                     text_offset=text_offset,
                 )
             else:
                 logprobs = None
-
+            
+            # push task to queue
             if self.task_batch.is_stop(i):
                 if generated_len == self.task_batch.max_tokens[i]:
                     finish_reason = "length"
