@@ -13,7 +13,7 @@ from langport.protocol.worker_protocol import (
 
 import torch
 
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
+from transformers import PreTrainedModel, PreTrainedTokenizer
 from transformers.generation.logits_process import (
     LogitsProcessor,
     LogitsProcessorList,
@@ -55,7 +55,7 @@ def prepare_logits_processor(
 
 
 class BatchingTask:
-    def __init__(self, tasks: List[GenerationTask], tokenizer: PreTrainedTokenizerBase, device: str, is_encoder_decoder: bool) -> None:
+    def __init__(self, tasks: List[GenerationTask], tokenizer: PreTrainedTokenizer, device: str, is_encoder_decoder: bool) -> None:
         self.batch_size = len(tasks)
         if self.batch_size == 0:
             return
@@ -157,8 +157,8 @@ class BatchingTask:
         return self.batch_top_logprobs_cache[idx]
     
     def update_new_token(self, batch_token: List[int],
-            token_probs: Optional[List[float]]=None,
-            top_logprobs: Optional[List[Dict[int, float]]]=None
+            token_probs: Optional[List[Optional[float]]]=None,
+            top_logprobs: Optional[List[Optional[Dict[int, float]]]]=None
         ):
         self._check_batch_size(batch_token)
         if token_probs is not None:
@@ -179,9 +179,9 @@ class BatchingTask:
             if self.get_generated_length(i) == self.max_tokens[i]:
                 self.set_stop(i)
             
-            if token_probs is not None:
+            if token_probs is not None and token_probs[i] is not None:
                 self.batch_tokens_probs_cache[i].append(token_probs[i])
-            if top_logprobs is not None:
+            if top_logprobs is not None and top_logprobs[i] is not None:
                 self.batch_top_logprobs_cache[i].append(top_logprobs[i])
                 
     def set_stop(self, idx:int):
@@ -258,8 +258,8 @@ class GenerationModel:
 
             new_ids = []
             # logprobs
-            token_probs = []
-            top_logprobs = []
+            token_probs = [None] * inputs.batch_size
+            top_logprobs = [None] * inputs.batch_size
 
             for i, task in enumerate(inputs.tasks):
                 if inputs.is_stop(i):
@@ -288,17 +288,15 @@ class GenerationModel:
                     token = int(torch.multinomial(probs, num_samples=1))
                 
                 if task.logprobs is not None:
-                    token_probs.append(each_logits[0, token].item())
-                    values, indices = torch.topk(each_logits[0, :], task.logprobs, dim=-1, largest=True, sorted=True)
+                    token_probs[i] = each_logits[0, token].item()
+                    top_values, top_indices = torch.topk(each_logits[0, :], task.logprobs, dim=-1, largest=True, sorted=True)
                     item = {}
-                    for i in range(len(values)):
-                        item[indices[i].item()] = values[i].item()
-                    top_logprobs.append(item)
+                    for top_i in range(len(top_values)):
+                        item[top_indices[top_i].item()] = top_values[top_i].item()
+                    top_logprobs[i] = item
                 new_ids.append(token)
             
             # update state
-            if len(token_probs) == 0: token_probs = None
-            if len(top_logprobs) == 0: top_logprobs = None
             inputs.update_new_token(new_ids, token_probs=token_probs, top_logprobs=top_logprobs)
             if streamer:
                 streamer.put(new_ids)
@@ -327,7 +325,7 @@ class GenerationModel:
 class GenerationWorkerStreamer(BaseStreamer):
     def __init__(self,
                  task_batch: BatchingTask,
-                 tokenizer: PreTrainedTokenizerBase,
+                 tokenizer: PreTrainedTokenizer,
                  worker: "GenerationModelWorker") -> None:
         self.task_batch = task_batch
         self.tokenizer = tokenizer
@@ -367,32 +365,43 @@ class GenerationWorkerStreamer(BaseStreamer):
                     text_offset[token_i] = last_id
                 else:
                     last_id = text_offset[token_i]
+            
+            token_logprobs = self.task_batch.get_generated_token_probs(i)
+            top_logprobs = self.task_batch.get_generated_top_logprobs(i)
+            if top_logprobs is not None:
+                top_logprobs_new = []
+                for prob in top_logprobs:
+                    top_logprobs_new.append({self.tokenizer.convert_ids_to_tokens(k): v for k, v in prob.items()})
+                top_logprobs = top_logprobs_new
 
             # remove stop words
             stop_pos = stop_by_stopwords(text, 0, task.stop)
             if stop_pos != -1:
                 token_stop_pos = len(tokens)
                 for token_i in reversed(range(0, len(text_offset))):
-                    if text_offset[i] < stop_pos:
-                        token_stop_pos = token_i
+                    if text_offset[token_i] < stop_pos:
+                        token_stop_pos = token_i + 1
                         break
     
                 self.task_batch.set_stop(i)
+
+                # remove tokens after stop pos
                 text = text[:stop_pos]
                 tokens = tokens[:token_stop_pos]
+                if token_logprobs is not None:
+                    token_logprobs = token_logprobs[:token_stop_pos]
+                if top_logprobs is not None:
+                    top_logprobs = top_logprobs[:token_stop_pos]
+                text_offset = text_offset[:token_stop_pos]
             
             prompt_len = self.task_batch.get_prompt_length(i)
             
             # logprobs
             if self.task_batch.tasks[i].logprobs is not None:
-                top_logprobs_new = []
-                top_logprobs = self.task_batch.get_generated_top_logprobs(i)
-                for prob in top_logprobs:
-                    top_logprobs_new.append({self.tokenizer.convert_ids_to_tokens(k): v for k, v in prob.items()})
                 logprobs = GenerationWorkerLogprobs(
                     tokens=tokens,
-                    token_logprobs=self.task_batch.get_generated_token_probs(i),
-                    top_logprobs=top_logprobs_new,
+                    token_logprobs=token_logprobs,
+                    top_logprobs=top_logprobs,
                     text_offset=text_offset,
                 )
             else:
