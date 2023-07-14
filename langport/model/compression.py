@@ -28,22 +28,26 @@ default_compression_config = CompressionConfig(
     num_bits=8, group_size=256, group_dim=1, symmetric=True, enabled=True
 )
 
+bit4_compression_config = CompressionConfig(
+    num_bits=4, group_size=256, group_dim=1, symmetric=True, enabled=True
+)
 
 class CLinear(nn.Module):
     """Compressed Linear Layer."""
 
-    def __init__(self, weight=None, bias=None, device=None):
+    def __init__(self, compression_config, weight=None, bias=None, device=None):
         super().__init__()
+        self.config = compression_config
         if weight is None:
             self.weight = None
         elif isinstance(weight, Tensor):
-            self.weight = compress(weight.data.to(device), default_compression_config)
+            self.weight = compress(weight.data.to(device), self.config)
         else:
             self.weight = weight
         self.bias = bias
 
     def forward(self, input: Tensor) -> Tensor:
-        weight = decompress(self.weight, default_compression_config)
+        weight = decompress(self.weight, self.config)
         if self.bias is not None:
             bias = self.bias.to(weight.dtype)
         else:
@@ -51,17 +55,17 @@ class CLinear(nn.Module):
         return F.linear(input.to(weight.dtype), weight, bias)
 
 
-def compress_module(module, target_device):
+def compress_module(module, target_device, config):
     for attr_str in dir(module):
         target_attr = getattr(module, attr_str)
         if type(target_attr) == torch.nn.Linear:
             setattr(
                 module,
                 attr_str,
-                CLinear(target_attr.weight, target_attr.bias, target_device),
+                CLinear(config, target_attr.weight, target_attr.bias, target_device),
             )
     for name, child in module.named_children():
-        compress_module(child, target_device)
+        compress_module(child, target_device, config)
 
 
 def get_compressed_list(module, prefix=""):
@@ -80,7 +84,7 @@ def get_compressed_list(module, prefix=""):
     return compressed_list
 
 
-def apply_compressed_weight(module, compressed_state_dict, target_device, prefix=""):
+def apply_compressed_weight(module, compressed_state_dict, target_device, config, prefix=""):
     for attr_str in dir(module):
         target_attr = getattr(module, attr_str)
         if type(target_attr) == torch.nn.Linear:
@@ -91,17 +95,17 @@ def apply_compressed_weight(module, compressed_state_dict, target_device, prefix
                 module,
                 attr_str,
                 CLinear(
-                    compressed_state_dict[full_name], target_attr.bias, target_device
+                    config, compressed_state_dict[full_name], target_attr.bias, target_device
                 ),
             )
     for name, child in module.named_children():
         child_prefix = f"{prefix}.{name}" if prefix else name
         apply_compressed_weight(
-            child, compressed_state_dict, target_device, child_prefix
+            child, compressed_state_dict, target_device, config, child_prefix
         )
 
 
-def load_compress_model(model_path, device, torch_dtype):
+def load_compress_model(model_path, device, torch_dtype, compression_config: CompressionConfig=default_compression_config, trust_remote_code: bool=True):
     # partially load model
     tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
     base_pattern = os.path.join(model_path, "pytorch_model-*.bin")
@@ -109,9 +113,9 @@ def load_compress_model(model_path, device, torch_dtype):
 
     with init_empty_weights():
         config = AutoConfig.from_pretrained(
-            model_path, low_cpu_mem_usage=True, torch_dtype=torch_dtype
+            model_path, low_cpu_mem_usage=True, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
         )
-        model = AutoModelForCausalLM.from_config(config)
+        model = AutoModelForCausalLM.from_config(config, trust_remote_code=trust_remote_code)
         linear_weights = get_compressed_list(model)
 
     compressed_state_dict = {}
@@ -122,7 +126,7 @@ def load_compress_model(model_path, device, torch_dtype):
             if name in linear_weights:
                 tensor = tmp_state_dict[name].to(device).data.to(torch_dtype)
                 compressed_state_dict[name] = compress(
-                    tensor, default_compression_config
+                    tensor, compression_config
                 )
             else:
                 compressed_state_dict[name] = tmp_state_dict[name].to(device)
@@ -136,7 +140,7 @@ def load_compress_model(model_path, device, torch_dtype):
             set_module_tensor_to_device(
                 model, name, device, value=compressed_state_dict[name]
             )
-    apply_compressed_weight(model, compressed_state_dict, device)
+    apply_compressed_weight(model, compressed_state_dict, device, compression_config)
 
     model.to(device)
 
@@ -175,13 +179,32 @@ def compress(tensor, config):
         )
     data = tensor.view(new_shape)
 
+    if num_bits >= 8:
+        final_shape = new_shape
+    else:
+        final_shape = [i for i in new_shape]
+        final_shape[group_dim + 1] = final_shape[group_dim + 1] // 2
+        final_data = torch.zeros(size=final_shape, dtype=torch.uint8, device=data.device)
+
     # Quantize
-    if symmetric:
-        B = 2 ** (num_bits - 1) - 1
-        scale = B / torch.max(data.abs(), dim=group_dim + 1, keepdim=True)[0]
-        data = data * scale
-        data = data.clamp_(-B, B).round_().to(torch.int8)
-        return data, scale, original_shape
+    if num_bits >= 8:
+        if symmetric:
+            B = 2 ** (num_bits - 1) - 1
+            scale = B / torch.max(data.abs(), dim=group_dim + 1, keepdim=True)[0]
+            data = data * scale
+            data = data.clamp_(-B, B).round_().to(torch.int8)
+            return data, scale, original_shape
+        else:
+            B = 2**num_bits - 1
+            mn = torch.min(data, dim=group_dim + 1, keepdim=True)[0]
+            mx = torch.max(data, dim=group_dim + 1, keepdim=True)[0]
+
+            scale = B / (mx - mn)
+            data = data - mn
+            data.mul_(scale)
+
+            data = data.clamp_(0, B).round_().to(torch.uint8)
+            return data, mn, scale, original_shape
     else:
         B = 2**num_bits - 1
         mn = torch.min(data, dim=group_dim + 1, keepdim=True)[0]
@@ -192,7 +215,15 @@ def compress(tensor, config):
         data.mul_(scale)
 
         data = data.clamp_(0, B).round_().to(torch.uint8)
-        return data, mn, scale, original_shape
+        left_half = [slice(None) for i in new_shape]
+        left_half[group_dim + 1] = slice(0, group_size//2)
+        final_data = torch.bitwise_left_shift(data[left_half], 4)
+
+        right_half = [slice(None) for i in new_shape]
+        right_half[group_dim + 1] = slice(group_size//2, group_size)
+        final_data = torch.bitwise_or(final_data, data[right_half])
+        
+        return final_data, mn, scale, original_shape
 
 def decompress(packed_data, config):
     """Simulate group-wise dequantization."""
@@ -206,15 +237,34 @@ def decompress(packed_data, config):
         config.symmetric,
     )
 
-    # Dequantize
-    if symmetric:
-        data, scale, original_shape = packed_data
-        data = data / scale
+    if num_bits >= 8:
+        # Dequantize
+        if symmetric:
+            data, scale, original_shape = packed_data
+            data = data / scale
+        else:
+            data, mn, scale, original_shape = packed_data
+            data = data / scale
+            data.add_(mn)
     else:
         data, mn, scale, original_shape = packed_data
-        data = data / scale
-        data.add_(mn)
+        new_shape = [i for i in data.shape]
+        new_shape[group_dim + 1] = 2 * new_shape[group_dim + 1]
+        int8_data = torch.zeros(size=new_shape, dtype=torch.uint8, device=data.device)
 
+        left_half = [slice(None) for i in new_shape]
+        left_half[group_dim + 1] = slice(0, group_size//2)
+        left_mask = torch.tensor([0b11110000], dtype=torch.uint8, device=data.device)
+        int8_data[left_half] = torch.bitwise_right_shift(torch.bitwise_and(data, left_mask), 4)
+
+        right_half = [slice(None) for i in new_shape]
+        right_half[group_dim + 1] = slice(group_size//2, group_size)
+        right_mask = torch.tensor([0b00001111], dtype=torch.uint8, device=data.device)
+        int8_data[right_half] = torch.bitwise_and(data, right_mask)
+
+        data = int8_data / scale
+        data.add_(mn)
+    
     # Unpad
     pad_len = (group_size - original_shape[group_dim] % group_size) % group_size
     if pad_len:

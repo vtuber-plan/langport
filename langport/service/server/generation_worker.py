@@ -45,6 +45,13 @@ if __name__ == "__main__":
     if args.model_name is None:
         args.model_name = os.path.basename(os.path.normpath(args.model_path))
     
+    if args.load_8bit:
+        quantization = "8bit"
+    elif args.load_4bit:
+        quantization = "4bit"
+    else:
+        quantization = None
+    
     from langport.model.executor.generation.huggingface import HuggingfaceGenerationExecutor
     executor = HuggingfaceGenerationExecutor(
         model_name=args.model_name,
@@ -52,7 +59,7 @@ if __name__ == "__main__":
         device=args.device,
         num_gpus=args.num_gpus,
         max_gpu_memory=args.max_gpu_memory,
-        load_8bit=args.load_8bit,
+        quantization=quantization,
         cpu_offloading=args.cpu_offloading,
         deepspeed=args.deepspeed,
         trust_remote_code=args.trust_remote_code

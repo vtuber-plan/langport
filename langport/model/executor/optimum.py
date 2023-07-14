@@ -15,7 +15,7 @@ class OptimumExecutor(LocalModelExecutor):
         device: str,
         num_gpus: int,
         max_gpu_memory: Optional[str],
-        load_8bit: bool = False,
+        quantization: Optional[str] = None,
         cpu_offloading: bool = False,
     ) -> None:
         super(OptimumExecutor, self).__init__(
@@ -24,7 +24,7 @@ class OptimumExecutor(LocalModelExecutor):
             device = device,
             num_gpus = num_gpus,
             max_gpu_memory = max_gpu_memory,
-            load_8bit = load_8bit,
+            quantization = quantization,
             cpu_offloading = cpu_offloading,
         )
 

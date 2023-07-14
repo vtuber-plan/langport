@@ -15,7 +15,7 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
         device: str,
         num_gpus: int,
         max_gpu_memory: Optional[str],
-        load_8bit: bool,
+        quantization: Optional[str],
         cpu_offloading: bool,
         deepspeed: bool = False,
         trust_remote_code: bool = False,
@@ -26,14 +26,14 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
             device=device,
             num_gpus=num_gpus,
             max_gpu_memory=max_gpu_memory,
-            load_8bit=load_8bit,
+            quantization=quantization,
             cpu_offloading=cpu_offloading
         )
         self.adapter = None
         self.model = None
         self.tokenizer = None
         self.adapter, self.model, self.tokenizer = self.load_model(
-            model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading, deepspeed, trust_remote_code
+            model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading, deepspeed, trust_remote_code
         )
 
         if hasattr(self.model.config, "max_sequence_length"):
