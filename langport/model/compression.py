@@ -29,7 +29,11 @@ default_compression_config = CompressionConfig(
 )
 
 bit4_compression_config = CompressionConfig(
-    num_bits=4, group_size=256, group_dim=1, symmetric=True, enabled=True
+    num_bits=4, group_size=256, group_dim=1, symmetric=False, enabled=True
+)
+
+bit2_compression_config = CompressionConfig(
+    num_bits=2, group_size=64, group_dim=1, symmetric=False, enabled=True
 )
 
 class CLinear(nn.Module):
@@ -181,9 +185,13 @@ def compress(tensor, config):
 
     if num_bits >= 8:
         final_shape = new_shape
-    else:
+    elif num_bits > 2:
         final_shape = [i for i in new_shape]
         final_shape[group_dim + 1] = final_shape[group_dim + 1] // 2
+        final_data = torch.zeros(size=final_shape, dtype=torch.uint8, device=data.device)
+    else:
+        final_shape = [i for i in new_shape]
+        final_shape[group_dim + 1] = final_shape[group_dim + 1] // 4
         final_data = torch.zeros(size=final_shape, dtype=torch.uint8, device=data.device)
 
     # Quantize
@@ -205,7 +213,7 @@ def compress(tensor, config):
 
             data = data.clamp_(0, B).round_().to(torch.uint8)
             return data, mn, scale, original_shape
-    else:
+    elif num_bits > 2:
         B = 2**num_bits - 1
         mn = torch.min(data, dim=group_dim + 1, keepdim=True)[0]
         mx = torch.max(data, dim=group_dim + 1, keepdim=True)[0]
@@ -221,8 +229,35 @@ def compress(tensor, config):
 
         right_half = [slice(None) for i in new_shape]
         right_half[group_dim + 1] = slice(group_size//2, group_size)
-        final_data = torch.bitwise_or(final_data, data[right_half])
+        final_data = final_data.bitwise_or_(data[right_half])
         
+        return final_data, mn, scale, original_shape
+    else:
+        B = 2**num_bits - 1
+        mn = torch.min(data, dim=group_dim + 1, keepdim=True)[0]
+        mx = torch.max(data, dim=group_dim + 1, keepdim=True)[0]
+
+        scale = B / (mx - mn)
+        data = data - mn
+        data.mul_(scale)
+
+        data = data.clamp_(0, B).round_().to(torch.uint8)
+        first_half = [slice(None) for i in new_shape]
+        first_half[group_dim + 1] = slice(0, group_size//4)
+        final_data = torch.bitwise_left_shift(data[first_half], 6)
+
+        second_half = [slice(None) for i in new_shape]
+        second_half[group_dim + 1] = slice(group_size//4, group_size//4*2)
+        final_data = final_data.bitwise_or_(torch.bitwise_left_shift(data[second_half], 4))
+        
+        third_half = [slice(None) for i in new_shape]
+        third_half[group_dim + 1] = slice(group_size//4*2, group_size//4*3)
+        final_data = final_data.bitwise_or_(torch.bitwise_left_shift(data[third_half], 2))
+
+        fourth_half = [slice(None) for i in new_shape]
+        fourth_half[group_dim + 1] = slice(group_size//4*3, group_size)
+        final_data = final_data.bitwise_or_(data[fourth_half])
+
         return final_data, mn, scale, original_shape
 
 def decompress(packed_data, config):
@@ -246,7 +281,7 @@ def decompress(packed_data, config):
             data, mn, scale, original_shape = packed_data
             data = data / scale
             data.add_(mn)
-    else:
+    elif num_bits > 2:
         data, mn, scale, original_shape = packed_data
         new_shape = [i for i in data.shape]
         new_shape[group_dim + 1] = 2 * new_shape[group_dim + 1]
@@ -261,6 +296,34 @@ def decompress(packed_data, config):
         right_half[group_dim + 1] = slice(group_size//2, group_size)
         right_mask = torch.tensor([0b00001111], dtype=torch.uint8, device=data.device)
         int8_data[right_half] = torch.bitwise_and(data, right_mask)
+
+        data = int8_data / scale
+        data.add_(mn)
+    else:
+        data, mn, scale, original_shape = packed_data
+        new_shape = [i for i in data.shape]
+        new_shape[group_dim + 1] = 4 * new_shape[group_dim + 1]
+        int8_data = torch.zeros(size=new_shape, dtype=torch.uint8, device=data.device)
+
+        first_half = [slice(None) for i in new_shape]
+        first_half[group_dim + 1] = slice(0, group_size//4)
+        first_mask = torch.tensor([0b11000000], dtype=torch.uint8, device=data.device)
+        int8_data[first_half] = torch.bitwise_right_shift(torch.bitwise_and(data, first_mask), 6)
+
+        second_half = [slice(None) for i in new_shape]
+        second_half[group_dim + 1] = slice(group_size//4, group_size//4*2)
+        second_mask = torch.tensor([0b00110000], dtype=torch.uint8, device=data.device)
+        int8_data[second_half] = torch.bitwise_right_shift(torch.bitwise_and(data, second_mask), 4)
+        
+        third_half = [slice(None) for i in new_shape]
+        third_half[group_dim + 1] = slice(group_size//4*2, group_size//4*3)
+        third_mask = torch.tensor([0b00001100], dtype=torch.uint8, device=data.device)
+        int8_data[third_half] = torch.bitwise_right_shift(torch.bitwise_and(data, third_mask), 2)
+
+        fourth_half = [slice(None) for i in new_shape]
+        fourth_half[group_dim + 1] = slice(group_size//4*3, group_size)
+        fourth_mask = torch.tensor([0b00000011], dtype=torch.uint8, device=data.device)
+        int8_data[fourth_half] = torch.bitwise_and(data, fourth_mask)
 
         data = int8_data / scale
         data.add_(mn)
