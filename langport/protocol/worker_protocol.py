@@ -89,6 +89,7 @@ class GenerationTask(BaseWorkerTask):
     stop: Optional[Union[List[str], str]] = None
     echo: Optional[bool] = False
     stop_token_ids: Optional[List[int]] = None
+    logprobs: Optional[int] = None
 
 class UsageInfo(BaseModel):
     prompt_tokens: int = 0
@@ -106,8 +107,14 @@ class EmbeddingWorkerResult(BaseWorkerResult):
     embedding: List[float]
     usage: UsageInfo = None
 
+class GenerationWorkerLogprobs(BaseModel):
+    tokens: List[str]
+    token_logprobs: List[float]
+    top_logprobs: List[Dict[str, float]]
+    text_offset: List[int]
+
 class GenerationWorkerResult(BaseWorkerResult):
     text: str
-    logprobs: Optional[int] = None
+    logprobs: Optional[GenerationWorkerLogprobs] = None
     finish_reason: Optional[Literal["stop", "length"]] = None
     usage: UsageInfo = None

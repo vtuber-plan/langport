@@ -44,7 +44,11 @@ class CLinear(nn.Module):
 
     def forward(self, input: Tensor) -> Tensor:
         weight = decompress(self.weight, default_compression_config)
-        return F.linear(input.to(weight.dtype), weight, self.bias)
+        if self.bias is not None:
+            bias = self.bias.to(weight.dtype)
+        else:
+            bias = self.bias
+        return F.linear(input.to(weight.dtype), weight, bias)
 
 
 def compress_module(module, target_device):
@@ -138,7 +142,6 @@ def load_compress_model(model_path, device, torch_dtype):
 
     return model, tokenizer
 
-
 def compress(tensor, config):
     """Simulate group-wise quantization."""
     if not config.enabled:
@@ -190,7 +193,6 @@ def compress(tensor, config):
 
         data = data.clamp_(0, B).round_().to(torch.uint8)
         return data, mn, scale, original_shape
-
 
 def decompress(packed_data, config):
     """Simulate group-wise dequantization."""

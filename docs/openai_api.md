@@ -73,7 +73,7 @@ Here we list the parameter compatibility of completions API.
 | `top_p`         | ● | ● | `1.0` | - |
 | `n`             | ● | ● | `1` | `COMPLETION_MAX_N` |
 | `stream`        | ● | ● | `false` | - |
-| `logprobs`      | ○ | ● | `0` | `COMPLETION_MAX_LOGPROBS` |
+| `logprobs`      | ● | ● | `0` | `COMPLETION_MAX_LOGPROBS` |
 | `echo`          | ● | ● | `false` | - |
 | `stop`          | ● | ● | - | - |
 | `presence_penalty`  | ○ | ● | - | - |

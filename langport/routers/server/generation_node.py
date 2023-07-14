@@ -60,6 +60,7 @@ async def api_completion_stream(request: Request):
         stop=params.get("stop", None),
         echo=params.get("echo", False),
         stop_token_ids=params.get("stop_token_ids", None),
+        logprobs=params.get("logprobs", None),
     ))
     background_tasks = create_background_tasks(app.node)
     return StreamingResponse(generator, background=background_tasks)
@@ -79,6 +80,7 @@ async def api_completion(request: Request):
         stop=params.get("stop", None),
         echo=params.get("echo", False),
         stop_token_ids=params.get("stop_token_ids", None),
+        logprobs=params.get("logprobs", None),
     ))
     completion = None
     for chunk in generator:

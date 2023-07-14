@@ -32,6 +32,7 @@ from langport.protocol.openai_api_protocol import (
     ChatCompletionStreamResponse,
     ChatMessage,
     ChatCompletionResponseChoice,
+    CompletionLogprobs,
     CompletionRequest,
     CompletionResponse,
     CompletionResponseChoice,
@@ -68,6 +69,7 @@ def get_gen_params(
     echo: Optional[bool],
     stream: Optional[bool],
     stop: Optional[Union[str, List[str]]],
+    logprobs: Optional[int]=None,
 ) -> Dict[str, Any]:
     # is_chatglm = "chatglm" in model_name.lower()
     conv = get_conversation_template(model_name)
@@ -101,6 +103,7 @@ def get_gen_params(
         "max_tokens": max_tokens,
         "echo": echo,
         "stream": stream,
+        "logprobs": logprobs,
     }
 
     if stop is None:
@@ -138,10 +141,14 @@ async def generate_completion_stream_generator(app_settings: AppSettings, payloa
             delta_text = decoded_unicode[len(previous_text) :]
             previous_text = decoded_unicode
 
+            if content.logprobs is None:
+                logprobs = None
+            else:
+                logprobs = CompletionLogprobs.parse_obj(content.logprobs.dict())
             choice_data = CompletionResponseStreamChoice(
                 index=i,
                 text=delta_text,
-                logprobs=content.logprobs,
+                logprobs=logprobs,
                 finish_reason=content.finish_reason,
             )
             chunk = CompletionStreamResponse(
@@ -305,11 +312,15 @@ async def completions_non_stream(app_settings: AppSettings, payload: Dict[str, A
         content = await content_task
         if content.error_code != ErrorCode.OK:
             return create_error_response(content.error_code, content.message)
+        if content.logprobs is None:
+            logprobs = None
+        else:
+            logprobs = CompletionLogprobs.parse_obj(content.logprobs.dict())
         choices.append(
             CompletionResponseChoice(
                 index=i,
                 text=content.text,
-                logprobs=content.logprobs,
+                logprobs=logprobs,
                 finish_reason=content.finish_reason,
             )
         )
@@ -375,6 +386,7 @@ async def api_completions(app_settings: AppSettings, request: CompletionRequest)
         echo=request.echo,
         stream=request.stream,
         stop=request.stop,
+        logprobs=request.logprobs,
     )
 
     if request.stream:

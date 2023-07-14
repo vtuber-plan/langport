@@ -61,7 +61,6 @@ class GenerationModelWorker(ClusterWorker):
     async def set_model_name(self):
         await self.set_local_state("model_name", self.executor.model_name, ttl=360)
 
-
     async def generation_stream(self, task: GenerationTask):
         prompt_tokens = len(self.executor.tokenize(task.prompt))
         max_tokens = task.max_tokens

@@ -21,9 +21,10 @@ if __name__ == "__main__":
     add_model_args(parser)
     parser.add_argument("--model-name", type=str, help="Optional display name")
     parser.add_argument("--limit-model-concurrency", type=int, default=8)
-    parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--stream-interval", type=int, default=2)
 
+    parser.add_argument("--chunk-size", type=int, default=512)
+    parser.add_argument("--threads", type=int, default=-1)
     parser.add_argument("--context-length", type=int, default=2048)
     parser.add_argument("--gpu-layers", type=int, default=0)
     parser.add_argument("--lib", type=str, default=None, choices=["avx2", "avx", "basic"], help="The path to a shared library or one of avx2, avx, basic.")
@@ -58,6 +59,8 @@ if __name__ == "__main__":
         gpu_layers=args.gpu_layers,
         lib=args.lib,
         model_type=args.model_type,
+        chunk_size=args.chunk_size,
+        threads=args.threads,
     )
 
     app.node = GenerationModelWorker(
@@ -66,7 +69,7 @@ if __name__ == "__main__":
         init_neighborhoods_addr=args.neighbors,
         executor=executor,
         limit_model_concurrency=args.limit_model_concurrency,
-        max_batch=args.batch,
+        max_batch=1,
         stream_interval=args.stream_interval,
         logger=logger,
     )
