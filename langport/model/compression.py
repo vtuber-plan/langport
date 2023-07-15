@@ -29,7 +29,7 @@ default_compression_config = CompressionConfig(
 )
 
 bit4_compression_config = CompressionConfig(
-    num_bits=4, group_size=256, group_dim=1, symmetric=False, enabled=True
+    num_bits=4, group_size=256, group_dim=1, symmetric=True, enabled=True
 )
 
 bit2_compression_config = CompressionConfig(
@@ -130,7 +130,7 @@ def load_compress_model(model_path, device, torch_dtype, compression_config: Com
         config = AutoConfig.from_pretrained(
             model_path, low_cpu_mem_usage=True, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
         )
-        model = AutoModelForCausalLM.from_config(config, trust_remote_code=trust_remote_code)
+        model = AutoModelForCausalLM.from_config(config, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code)
         linear_weights = get_compressed_list(model)
 
     compressed_state_dict = {}
@@ -206,9 +206,9 @@ def compress(tensor, config):
         final_data = torch.zeros(size=final_shape, dtype=torch.uint8, device=data.device)
 
     # Quantize
+    B = 2 ** (num_bits - 1) - 1
     if num_bits >= 8:
         if symmetric:
-            B = 2 ** (num_bits - 1) - 1
             scale = B / torch.max(data.abs(), dim=group_dim + 1, keepdim=True)[0]
             data = data * scale
             data = data.clamp_(-B, B).round_().to(torch.int8)
@@ -216,7 +216,6 @@ def compress(tensor, config):
             inv_scale = 1.0 / scale
             return data, None, scale, inv_scale, original_shape
         else:
-            B = 2**num_bits - 1
             mn = torch.min(data, dim=group_dim + 1, keepdim=True)[0]
             mx = torch.max(data, dim=group_dim + 1, keepdim=True)[0]
 
@@ -229,27 +228,42 @@ def compress(tensor, config):
             inv_scale = 1.0 / scale
             return data, mn, scale, inv_scale, original_shape
     elif num_bits > 2:
-        B = 2**num_bits - 1
-        mn = torch.min(data, dim=group_dim + 1, keepdim=True)[0]
-        mx = torch.max(data, dim=group_dim + 1, keepdim=True)[0]
+        if symmetric:
+            scale = B / torch.max(data.abs(), dim=group_dim + 1, keepdim=True)[0]
+            data = data * scale
+            data = data.clamp_(-B, B).round_().to(torch.int16)
+            data = (data + B).to(torch.uint8)
 
-        scale = B / (mx - mn)
-        data = data - mn
-        data.mul_(scale)
+            left_half = [slice(None) for i in new_shape]
+            left_half[group_dim + 1] = slice(0, group_size//2)
+            final_data = torch.bitwise_left_shift(data[left_half], 4)
 
-        data = data.clamp_(0, B).round_().to(torch.uint8)
-        left_half = [slice(None) for i in new_shape]
-        left_half[group_dim + 1] = slice(0, group_size//2)
-        final_data = torch.bitwise_left_shift(data[left_half], 4)
+            right_half = [slice(None) for i in new_shape]
+            right_half[group_dim + 1] = slice(group_size//2, group_size)
+            final_data = final_data.bitwise_or_(data[right_half])
 
-        right_half = [slice(None) for i in new_shape]
-        right_half[group_dim + 1] = slice(group_size//2, group_size)
-        final_data = final_data.bitwise_or_(data[right_half])
-        
-        inv_scale = 1.0 / scale
-        return final_data, mn, scale, inv_scale, original_shape
+            inv_scale = 1.0 / scale
+            return final_data, None, scale, inv_scale, original_shape
+        else:
+            mn = torch.min(data, dim=group_dim + 1, keepdim=True)[0]
+            mx = torch.max(data, dim=group_dim + 1, keepdim=True)[0]
+
+            scale = B / (mx - mn)
+            data = data - mn
+            data.mul_(scale)
+
+            data = data.clamp_(0, B).round_().to(torch.uint8)
+            left_half = [slice(None) for i in new_shape]
+            left_half[group_dim + 1] = slice(0, group_size//2)
+            final_data = torch.bitwise_left_shift(data[left_half], 4)
+
+            right_half = [slice(None) for i in new_shape]
+            right_half[group_dim + 1] = slice(group_size//2, group_size)
+            final_data = final_data.bitwise_or_(data[right_half])
+            
+            inv_scale = 1.0 / scale
+            return final_data, mn, scale, inv_scale, original_shape
     else:
-        B = 2**num_bits - 1
         mn = torch.min(data, dim=group_dim + 1, keepdim=True)[0]
         mx = torch.max(data, dim=group_dim + 1, keepdim=True)[0]
 
@@ -289,37 +303,41 @@ def decompress(packed_data, config, dtype=torch.float32):
         config.symmetric,
     )
 
+    data, mn, scale, inv_scale, original_shape = packed_data
+    B = 2 ** (num_bits - 1) - 1
     if num_bits >= 8:
         # Dequantize
         if symmetric:
-            data, mn, scale, inv_scale, original_shape = packed_data
             # data = data.to(dtype) * inv_scale.to(dtype)
             data = data.to(dtype)
             data = data.mul_(inv_scale)
         else:
-            data, mn, scale, inv_scale, original_shape = packed_data
             data = data.to(dtype)
             data = data.mul_(inv_scale).add_(mn)
     elif num_bits > 2:
-        data, mn, scale, inv_scale, original_shape = packed_data
         new_shape = [i for i in data.shape]
         new_shape[group_dim + 1] = 2 * new_shape[group_dim + 1]
-        int8_data = torch.zeros(size=new_shape, dtype=torch.uint8, device=data.device)
+
+        float_data = torch.empty(size=new_shape, dtype=dtype, device=data.device)
 
         left_half = [slice(None) for i in new_shape]
         left_half[group_dim + 1] = slice(0, group_size//2)
-        left_mask = torch.tensor([0b11110000], dtype=torch.uint8, device=data.device)
-        int8_data[left_half] = torch.bitwise_right_shift(torch.bitwise_and(data, left_mask), 4)
+        float_data[left_half] = torch.bitwise_and(data, 0b11110000).bitwise_right_shift_(4)
 
         right_half = [slice(None) for i in new_shape]
         right_half[group_dim + 1] = slice(group_size//2, group_size)
-        right_mask = torch.tensor([0b00001111], dtype=torch.uint8, device=data.device)
-        int8_data[right_half] = torch.bitwise_and(data, right_mask)
+        float_data[right_half] = torch.bitwise_and(data, 0b00001111)
 
-        data = int8_data.to(dtype)
-        data = data.mul_(inv_scale).add_(mn)
+        # left_half = torch.bitwise_and(data, 0b11110000).bitwise_right_shift_(4)
+        # right_half = torch.bitwise_and(data, 0b00001111)
+        # float_data = torch.concat((left_half, right_half), dim=group_dim + 1).to(dtype)
+
+        if symmetric:
+            float_data = float_data.sub_(B)
+            data = float_data.mul_(inv_scale)
+        else:
+            data = float_data.mul_(inv_scale).add_(mn)
     else:
-        data, mn, scale, inv_scale, original_shape = packed_data
         new_shape = [i for i in data.shape]
         new_shape[group_dim + 1] = 4 * new_shape[group_dim + 1]
         int8_data = torch.zeros(size=new_shape, dtype=torch.uint8, device=data.device)
