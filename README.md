@@ -31,23 +31,11 @@ The core features include:
 - Tabby-compatible RESTful APIs.
 
 ## Support Model Architectures
-* LLaMa
-* GLM
-* Bloom
-* OPT
-* GPT2
-* GPT Neo
-* GPT Big Code
+* LLaMa, GLM, Bloom, OPT, GPT2, GPT Neo, GPT Big Code and so on.
 
 ## Tested Models
-* LLaMa
-* Vicuna
-* ChatGLM
-* ChatGLM2
-* Falcon
-* Starcoder
-* WizardLM
-* OpenBuddy
+* LLaMa, Vicuna, ChatGLM, ChatGLM2, Falcon, Starcoder, WizardLM, InternLM, OpenBuddy, FireFly, CodeGen, Phoenix, RWKV, StableLM and so on.
+
 
 ## Benchmark
 We use single RTX3090 to run a finetuned 7B LLaMA model (OpenBuddy V0.9) under the bf16 setting.
@@ -56,6 +44,7 @@ We create 32 threads to submit chat tasks to the server, and the following figur
 ![benchmark_chat](assets/benchmark_chat.jpg)
 
 ## News
+- [2023/07/16] Support int4 quantization.
 - [2023/07/13] Support generation logprobs parameter.
 - [2023/06/18] Add ggml (llama.cpp gpt.cpp starcoder.cpp etc.) worker support.
 - [2023/06/09] Add LLama.cpp worker support.
