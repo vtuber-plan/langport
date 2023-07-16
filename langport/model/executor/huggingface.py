@@ -164,15 +164,15 @@ class HuggingfaceExecutor(LocalModelExecutor):
             else:
                 if "8" in quantization:
                     model, tokenizer = load_compress_model(
-                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=default_compression_config
+                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=default_compression_config, trust_remote_code=trust_remote_code
                     )
                 elif "4" in quantization:
                     model, tokenizer = load_compress_model(
-                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=bit4_compression_config
+                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=bit4_compression_config, trust_remote_code=trust_remote_code
                     )
                 else:
                     model, tokenizer = load_compress_model(
-                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=default_compression_config
+                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=default_compression_config, trust_remote_code=trust_remote_code
                     )
                 # return adapter, model, tokenizer
         else:

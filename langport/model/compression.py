@@ -122,7 +122,7 @@ def apply_compressed_weight(module, compressed_state_dict, target_device, config
 
 def load_compress_model(model_path, device, torch_dtype, compression_config: CompressionConfig=default_compression_config, trust_remote_code: bool=True):
     # partially load model
-    tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, trust_remote_code=trust_remote_code)
     base_pattern = os.path.join(model_path, "pytorch_model-*.bin")
     files = glob.glob(base_pattern)
 
