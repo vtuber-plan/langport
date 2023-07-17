@@ -78,11 +78,13 @@ class ConversationHistory:
             else:
                 ret = self.system + self.settings.sep
             
-            for role, message in self.messages:
+            for i, (role, message) in enumerate(self.messages):
+                if i % len(self.settings.roles) == 0:
+                    ret += round_sep
                 if message:
-                    ret += round_sep + role + ": " + message + self.settings.sep
+                    ret += role + ": " + message + self.settings.sep
                 else:
-                    ret += round_sep + role + ":"
+                    ret += role + ": "
             return ret
         elif self.settings.sep_style == SeparatorStyle.ADD_COLON_TWO:
             seps = [self.settings.sep, self.settings.sep2]
@@ -92,10 +94,12 @@ class ConversationHistory:
                 ret = self.system + seps[0]
             
             for i, (role, message) in enumerate(self.messages):
+                if i % len(self.settings.roles) == 0:
+                    ret += round_sep
                 if message:
-                    ret += round_sep + role + ": " + message + seps[i % 2]
+                    ret += role + ": " + message + seps[i % 2]
                 else:
-                    ret += round_sep + role + ":"
+                    ret += role + ": "
             return ret
         elif self.settings.sep_style == SeparatorStyle.NO_COLON_SINGLE:
             if self.settings.system_sep is not None:
@@ -103,11 +107,13 @@ class ConversationHistory:
             else:
                 ret = self.system
             
-            for role, message in self.messages:
+            for i, (role, message) in enumerate(self.messages):
+                if i % len(self.settings.roles) == 0:
+                    ret += round_sep
                 if message:
-                    ret += round_sep + role + message + self.settings.sep
+                    ret += role + message + self.settings.sep
                 else:
-                    ret += round_sep + role
+                    ret += role
             return ret
         elif self.settings.sep_style == SeparatorStyle.ADD_NEW_LINE_SINGLE:
             if self.settings.system_sep is not None:
@@ -115,11 +121,14 @@ class ConversationHistory:
             else:
                 ret = self.system + self.settings.sep
 
-            for role, message in self.messages:
+            for i, (role, message) in enumerate(self.messages):
+                if i % len(self.settings.roles) == 0:
+                    ret += round_sep
+                
                 if message:
-                    ret += round_sep + role + "\n" + message + self.settings.sep
+                    ret += role + "\n" + message + self.settings.sep
                 else:
-                    ret += round_sep + role + "\n"
+                    ret += role + "\n"
             return ret
         elif self.settings.sep_style == SeparatorStyle.DOLLY:
             seps = [self.settings.sep, self.settings.sep2]
