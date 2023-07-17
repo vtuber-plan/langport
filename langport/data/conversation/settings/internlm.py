@@ -12,5 +12,5 @@ internlm = ConversationSettings(
     round_sep="<s>",
     sep="<eoh>\n",
     sep2="<eoa>\n",
-    stop_str="<eoa>\n"
+    stop_str="<eoa>"
 )

@@ -104,14 +104,17 @@ def get_gen_params(
         "echo": echo,
         "stream": stream,
         "logprobs": logprobs,
+        "stop_token_ids": conv.settings.stop_token_ids,
     }
 
     if stop is None:
         gen_params.update(
-            {"stop": conv.settings.stop_str, "stop_token_ids": conv.settings.stop_token_ids}
+            {"stop": conv.settings.stop_str}
         )
+    elif isinstance(stop, str):
+        gen_params.update({"stop": [stop, conv.settings.stop_str]})
     else:
-        gen_params.update({"stop": stop})
+        gen_params.update({"stop": stop + [conv.settings.stop_str]})
 
     return gen_params
 
