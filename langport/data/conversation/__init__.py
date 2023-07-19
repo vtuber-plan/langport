@@ -20,6 +20,7 @@ class SeparatorStyle(Enum):
     RWKV = auto()
     PHOENIX = auto()
     CHATGLM = auto()
+    LLAMA = auto()
 
 
 @dataclasses.dataclass
@@ -171,6 +172,22 @@ class ConversationHistory:
                     ret += role + "：" + message + self.settings.sep
                 else:
                     ret += role + "："
+            return ret
+        elif self.settings.sep_style == SeparatorStyle.LLAMA:
+            B_INST, E_INST = "[INST]", "[/INST]"
+            B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
+            system_q = B_SYS + self.system + E_SYS
+            system_a = ""
+            ret = f"{B_INST} {system_q} {E_INST} {system_a}"
+            for i, (role, message) in enumerate(self.messages):
+                if i % 2 == 0:
+                    inst = B_INST
+                else:
+                    inst = E_INST
+                if message:
+                    ret += inst + " " + message.strip() + " "
+                else:
+                    ret += inst + " "
             return ret
         else:
             raise ValueError(f"Invalid style: {self.settings.sep_style}")

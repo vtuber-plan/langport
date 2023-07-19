@@ -31,10 +31,10 @@ The core features include:
 - Tabby-compatible RESTful APIs.
 
 ## Support Model Architectures
-* LLaMa, GLM, Bloom, OPT, GPT2, GPT Neo, GPT Big Code and so on.
+* LLaMa, LLaMa2, GLM, Bloom, OPT, GPT2, GPT Neo, GPT Big Code and so on.
 
 ## Tested Models
-* LLaMa, Vicuna, ChatGLM, ChatGLM2, Falcon, Starcoder, WizardLM, InternLM, OpenBuddy, FireFly, CodeGen, Phoenix, RWKV, StableLM and so on.
+* LLaMa, LLaMa2-chat, Vicuna, ChatGLM, ChatGLM2, Falcon, Starcoder, WizardLM, InternLM, OpenBuddy, FireFly, CodeGen, Phoenix, RWKV, StableLM and so on.
 
 
 ## Benchmark
