@@ -28,7 +28,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     node_id = str(uuid.uuid4())
-    logger = build_logger("generation_worker", f"generation_worker_{node_id}.log")
+    logger = build_logger("langport.service.chatgpt_generation_worker", f"chatgpt_generation_worker_{node_id}.log")
     logger.info(f"args: {args}")
 
     if args.port is None:

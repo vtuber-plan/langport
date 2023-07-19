@@ -1,30 +1,16 @@
 import asyncio
 
-import argparse
 import asyncio
 import json
-import logging
 
-import os
-import random
-import traceback
 from typing import Generator, Optional, Union, Dict, List, Any
 
-import fastapi
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware, DispatchFunction
+from fastapi.responses import StreamingResponse
 import httpx
-import numpy as np
 import shortuuid
-from starlette.types import ASGIApp
-from tenacity import retry, stop_after_attempt
-import uvicorn
-from pydantic import BaseSettings
 
 from langport.constants import WORKER_API_TIMEOUT, ErrorCode
 from langport.model.model_adapter import get_conversation_template
-from fastapi.exceptions import RequestValidationError
 from langport.protocol.openai_api_protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -42,7 +28,6 @@ from langport.protocol.openai_api_protocol import (
     EmbeddingsData,
     EmbeddingsRequest,
     EmbeddingsResponse,
-    ErrorResponse,
     ModelCard,
     ModelList,
     ModelPermission,
@@ -52,8 +37,6 @@ from langport.protocol.worker_protocol import (
     BaseWorkerResult,
     EmbeddingWorkerResult,
     GenerationWorkerResult,
-    WorkerAddressRequest,
-    WorkerAddressResponse,
 )
 from langport.core.dispatch import DispatchMethod
 from langport.routers.gateway.common import LANGPORT_HEADER, AppSettings, _get_worker_address, _list_models, check_model, check_requests, create_error_response
@@ -104,14 +87,17 @@ def get_gen_params(
         "echo": echo,
         "stream": stream,
         "logprobs": logprobs,
+        "stop_token_ids": conv.settings.stop_token_ids,
     }
 
     if stop is None:
         gen_params.update(
-            {"stop": conv.settings.stop_str, "stop_token_ids": conv.settings.stop_token_ids}
+            {"stop": conv.settings.stop_str}
         )
+    elif isinstance(stop, str):
+        gen_params.update({"stop": [stop, conv.settings.stop_str]})
     else:
-        gen_params.update({"stop": stop})
+        gen_params.update({"stop": stop + [conv.settings.stop_str]})
 
     return gen_params
 

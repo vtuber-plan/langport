@@ -26,7 +26,7 @@ class LocalModelExecutor(BaseModelExecutor):
         device: str,
         num_gpus: int,
         max_gpu_memory: Optional[str],
-        load_8bit: bool = False,
+        quantization: Optional[str] = False,
         cpu_offloading: bool = False,
     ) -> None:
         super(LocalModelExecutor, self).__init__(
@@ -37,7 +37,7 @@ class LocalModelExecutor(BaseModelExecutor):
         self.device = device
         self.num_gpus = num_gpus
         self.max_gpu_memory = max_gpu_memory
-        self.load_8bit = load_8bit
+        self.quantization = quantization
         self.cpu_offloading = cpu_offloading
         
     @property

@@ -27,7 +27,8 @@ import warnings
 import psutil
 
 import torch
-from langport.model.compression import load_compress_model
+from langport.model.compression import load_compress_model, default_compression_config, bit4_compression_config
+from langport.model.svd import load_svd_model
 from langport.model.executor.base import BaseModelExecutor
 from langport.model.model_adapter import get_model_adapter, raise_warning_for_incompatible_cpu_offloading_configuration
 from langport.model.monkey_patch_non_inplace import replace_llama_attn_with_non_inplace_operations
@@ -43,7 +44,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
         device: str,
         num_gpus: int,
         max_gpu_memory: Optional[str],
-        load_8bit: bool,
+        quantization: Optional[str],
         cpu_offloading: bool,
         deepspeed: bool = False,
     ) -> None:
@@ -53,7 +54,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
             device=device,
             num_gpus=num_gpus,
             max_gpu_memory=max_gpu_memory,
-            load_8bit=load_8bit,
+            quantization=quantization,
             cpu_offloading=cpu_offloading
         )
     
@@ -102,7 +103,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
         device: str,
         num_gpus: int,
         max_gpu_memory: Optional[str] = None,
-        load_8bit: bool = False,
+        quantization: Optional[str] = None,
         cpu_offloading: bool = False,
         deepspeed: bool = False,
         trust_remote_code: bool = False,
@@ -113,7 +114,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
 
         # Handle device mapping
         cpu_offloading = raise_warning_for_incompatible_cpu_offloading_configuration(
-            device, load_8bit, cpu_offloading
+            device, quantization!=None, cpu_offloading
         )
         if device == "cpu":
             kwargs = {"torch_dtype": torch.float32}
@@ -152,18 +153,27 @@ class HuggingfaceExecutor(LocalModelExecutor):
             kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_8bit_fp32_cpu_offload=cpu_offloading
             )
-            kwargs["load_in_8bit"] = load_8bit
+            kwargs["load_in_8bit"] = quantization!=None
             # Load model
             model, tokenizer = self._load_hf_model(adapter, model_path, kwargs)
-        elif load_8bit:
+        elif quantization is not None:
             if num_gpus != 1:
                 warnings.warn(
-                    "8-bit quantization is not supported for multi-gpu inference."
+                    "n-bit quantization is not supported for multi-gpu inference."
                 )
             else:
-                model, tokenizer = load_compress_model(
-                    model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"]
-                )
+                if "8" in quantization:
+                    model, tokenizer = load_compress_model(
+                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=default_compression_config, trust_remote_code=trust_remote_code
+                    )
+                elif "4" in quantization:
+                    model, tokenizer = load_compress_model(
+                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=bit4_compression_config, trust_remote_code=trust_remote_code
+                    )
+                else:
+                    model, tokenizer = load_compress_model(
+                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=default_compression_config, trust_remote_code=trust_remote_code
+                    )
                 # return adapter, model, tokenizer
         else:
             # Load model
@@ -174,7 +184,8 @@ class HuggingfaceExecutor(LocalModelExecutor):
             import deepspeed
 
             dtype = torch.float16
-            if load_8bit:
+            # FIXME: deepspeed quantization
+            if quantization is not None:
                 dtype = torch.int8
             config = {
                 # "mp_size": 1,        # Number of GPU

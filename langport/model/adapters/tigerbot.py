@@ -3,16 +3,16 @@ from langport.data.conversation.conversation_settings import get_conv_settings
 from langport.model.model_adapter import BaseAdapter
 
 
-class KoalaAdapter(BaseAdapter):
-    """The model adapter for koala"""
+class TigerBotAdapter(BaseAdapter):
+    """The model adapter for TigerBot"""
 
     def match(self, model_path: str):
-        return "koala" in model_path
+        return "tigerbot" in model_path.lower()
 
     def get_default_conv_template(self, model_path: str) -> ConversationHistory:
-        settings = get_conv_settings("koala_v1")
+        settings = get_conv_settings("tigerbot")
         return ConversationHistory(
-            system="BEGINNING OF CONVERSATION:",
+            system="",
             messages=[],
             offset=0,
             settings=settings,

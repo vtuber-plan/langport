@@ -344,7 +344,7 @@ class GenerationWorkerStreamer(BaseStreamer):
             token_ids = self.task_batch.get_generated_ids(i)
 
             # text = self.tokenizer.decode(token_ids, skip_special_tokens=True)
-            tokens = self.tokenizer.convert_ids_to_tokens(token_ids)
+            tokens = self.tokenizer.convert_ids_to_tokens(token_ids, skip_special_tokens=True)
             text = self.tokenizer.convert_tokens_to_string(tokens)
 
             # get offset mapping from token to text
@@ -477,7 +477,7 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         device: str,
         num_gpus: int,
         max_gpu_memory: Optional[str],
-        load_8bit: bool,
+        quantization: Optional[str],
         cpu_offloading: bool,
         deepspeed: bool = False,
         trust_remote_code: bool = False
@@ -488,14 +488,14 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
             device=device,
             num_gpus=num_gpus,
             max_gpu_memory=max_gpu_memory,
-            load_8bit=load_8bit,
+            quantization=quantization,
             cpu_offloading=cpu_offloading
         )
         self.adapter = None
         self.model = None
         self.tokenizer = None
         self.adapter, self.model, self.tokenizer = self.load_model(
-            model_path, device, num_gpus, max_gpu_memory, load_8bit, cpu_offloading, deepspeed, trust_remote_code
+            model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading, deepspeed, trust_remote_code
         )
 
         # self.model = torch.compile(self.model)
