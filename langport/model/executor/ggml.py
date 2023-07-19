@@ -30,7 +30,7 @@ class GgmlExecutor(LocalModelExecutor):
         model_type: str = 'llama',
         chunk_size: int = 1024,
         threads: int = -1,
-        load_8bit: bool = False,
+        quantization: Optional[str] = None,
         cpu_offloading: bool = False,
     ) -> None:
         super(GgmlExecutor, self).__init__(
@@ -39,7 +39,7 @@ class GgmlExecutor(LocalModelExecutor):
             device = device,
             num_gpus = num_gpus,
             max_gpu_memory = max_gpu_memory,
-            load_8bit = load_8bit,
+            quantization = quantization,
             cpu_offloading = cpu_offloading,
         )
         self.gpu_layers = gpu_layers

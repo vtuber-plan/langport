@@ -2,6 +2,7 @@ import argparse
 import os
 import random
 import uuid
+import warnings
 import uvicorn
 
 from langport.workers.generation_worker import GenerationModelWorker
@@ -36,6 +37,9 @@ if __name__ == "__main__":
                 f"Larger --num-gpus ({args.num_gpus}) than --gpus {args.gpus}!"
             )
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
+
+    if args.load_8bit or args.load_4bit:
+        warnings.warn("The optimum backend does not yet support quantization parameters.")
 
     if args.port is None:
         args.port = random.randint(21001, 29001)
