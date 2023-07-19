@@ -34,7 +34,7 @@ The core features include:
 * LLaMa, LLaMa2, GLM, Bloom, OPT, GPT2, GPT Neo, GPT Big Code and so on.
 
 ## Tested Models
-* LLaMa, LLaMa2-chat, Vicuna, ChatGLM, ChatGLM2, Falcon, Starcoder, WizardLM, InternLM, OpenBuddy, FireFly, CodeGen, Phoenix, RWKV, StableLM and so on.
+* LLaMa, LLaMa2-chat, Vicuna, ChatGLM, ChatGLM2, Falcon, Starcoder, WizardLM, InternLM, OpenBuddy, FireFly, CodeGen, Phoenix, RWKV, StableLM, NingYu and so on.
 
 
 ## Benchmark
