@@ -344,7 +344,7 @@ class GenerationWorkerStreamer(BaseStreamer):
             token_ids = self.task_batch.get_generated_ids(i)
 
             # text = self.tokenizer.decode(token_ids, skip_special_tokens=True)
-            tokens = self.tokenizer.convert_ids_to_tokens(token_ids)
+            tokens = self.tokenizer.convert_ids_to_tokens(token_ids, skip_special_tokens=True)
             text = self.tokenizer.convert_tokens_to_string(tokens)
 
             # get offset mapping from token to text
