@@ -19,7 +19,6 @@ from langport.constants import (
 )
 from langport.utils import server_error_msg, pretty_print_semaphore
 
-
 class GenerationModelWorker(ClusterWorker):
     def __init__(
         self,
