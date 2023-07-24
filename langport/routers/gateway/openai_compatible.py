@@ -53,6 +53,8 @@ def get_gen_params(
     stream: Optional[bool],
     stop: Optional[Union[str, List[str]]],
     logprobs: Optional[int]=None,
+    presence_penalty: Optional[float]=0.0,
+    frequency_penalty: Optional[float]=0.0,
 ) -> Dict[str, Any]:
     # is_chatglm = "chatglm" in model_name.lower()
     conv = get_conversation_template(model_name)
@@ -98,6 +100,11 @@ def get_gen_params(
         gen_params.update({"stop": [stop, conv.settings.stop_str]})
     else:
         gen_params.update({"stop": stop + [conv.settings.stop_str]})
+    
+    if presence_penalty is not None:
+        gen_params["presence_penalty"] = presence_penalty
+    if frequency_penalty is not None:
+        gen_params["frequency_penalty"] = frequency_penalty
 
     return gen_params
 
@@ -373,6 +380,8 @@ async def api_completions(app_settings: AppSettings, request: CompletionRequest)
         stream=request.stream,
         stop=request.stop,
         logprobs=request.logprobs,
+        presence_penalty=request.presence_penalty,
+        frequency_penalty=request.frequency_penalty,
     )
 
     if request.stream:
@@ -399,6 +408,8 @@ async def api_chat_completions(app_settings: AppSettings, request: ChatCompletio
         echo=False,
         stream=request.stream,
         stop=request.stop,
+        presence_penalty=request.presence_penalty,
+        frequency_penalty=request.frequency_penalty,
     )
     if request.stream:
         return await chat_completions_stream(app_settings, payload, request)

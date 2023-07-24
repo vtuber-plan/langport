@@ -180,6 +180,26 @@ def check_requests(request) -> Optional[JSONResponse]:
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.stop} is not valid under any of the given schemas - 'stop'",
         )
+    if request.presence_penalty is not None and request.presence_penalty < -2.0:
+        return create_error_response(
+            ErrorCode.PARAM_OUT_OF_RANGE,
+            f"{request.presence_penalty} is less than the minimum of -2.0 - 'presence_penalty'",
+        )
+    if request.presence_penalty is not None and request.presence_penalty > 2.0:
+        return create_error_response(
+            ErrorCode.PARAM_OUT_OF_RANGE,
+            f"{request.presence_penalty} is less than the maximum of 2.0 - 'presence_penalty'",
+        )
+    if request.frequency_penalty is not None and request.frequency_penalty < -2.0:
+        return create_error_response(
+            ErrorCode.PARAM_OUT_OF_RANGE,
+            f"{request.frequency_penalty} is less than the minimum of -2.0 - 'frequency_penalty'",
+        )
+    if request.frequency_penalty is not None and request.frequency_penalty > 2.0:
+        return create_error_response(
+            ErrorCode.PARAM_OUT_OF_RANGE,
+            f"{request.frequency_penalty} is less than the maximum of 2.0 - 'frequency_penalty'",
+        )
 
     return None
 
