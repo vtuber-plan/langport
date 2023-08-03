@@ -597,6 +597,8 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
             self._context_len = self.model.config.max_position_embeddings
         else:
             self._context_len = 2048
+        
+        self.current_batch = 2
 
     @property
     def context_length(self) -> int:
@@ -610,12 +612,32 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         if not worker.online:
             return
 
-        tasks = worker.fetch_tasks()
+        tasks = worker.fetch_tasks(task_num=self.current_batch)
 
-        # batch inference
-        inputs = BatchingTask(tasks, self.tokenizer, self.device, self.model.config.is_encoder_decoder)
-        if inputs.batch_size == 0:
+        if len(tasks) == 0:
             return
+        
+        # batch inference
+        tasks = sorted(tasks, key=lambda x:len(x.prompt), reverse=True)
+        inputs = BatchingTask(tasks, self.tokenizer, self.device, self.model.config.is_encoder_decoder)
+        
+        if torch.cuda.is_available() and "cuda" in self.device:
+            if self.device == "cuda":
+                device = "cuda:0"
+            else:
+                device = self.device
+            free_mem, total_mem = torch.cuda.mem_get_info(device)
+            if free_mem < total_mem * 0.3:
+                new_batch = self.current_batch * 2
+            elif free_mem < total_mem * 0.8:
+                new_batch = self.current_batch + 1
+            elif free_mem > total_mem * 0.95:
+                new_batch = self.current_batch - 1
+            if len(tasks) == self.current_batch:
+                self.current_batch = new_batch
+        else:
+            self.current_batch = worker.max_batch
+
         streamer = GenerationWorkerStreamer(inputs, self.tokenizer, worker)
         model = GenerationModel(self.model)
         max_new_tokens = max(inputs.max_tokens)

@@ -44,6 +44,7 @@ We create 32 threads to submit chat tasks to the server, and the following figur
 ![benchmark_chat](assets/benchmark_chat.jpg)
 
 ## News
+- [2023/08/04] Dynamic batch inference.
 - [2023/07/16] Support int4 quantization.
 - [2023/07/13] Support generation logprobs parameter.
 - [2023/06/18] Add ggml (llama.cpp gpt.cpp starcoder.cpp etc.) worker support.

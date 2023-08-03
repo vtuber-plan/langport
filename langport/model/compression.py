@@ -13,6 +13,13 @@ from torch.nn import functional as F
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
 
+try:
+    import cupy
+    cupy_available = True
+except ImportError:
+    cupy_available = False
+    print("Info: Install cupy to get better quantization performance.")
+
 @dataclasses.dataclass
 class CompressionConfig:
     """Group-wise quantization."""
@@ -52,6 +59,7 @@ class CLinear(nn.Module):
         else:
             self.weight = weight
         self.bias = bias
+        self.use_cupy = cupy_available
 
     def forward(self, input: Tensor) -> Tensor:
         weight = decompress(self.weight, self.config, input.dtype)
@@ -148,7 +156,8 @@ def load_compress_model(model_path, device, torch_dtype, compression_config: Com
             tmp_state_dict[name] = None
             tensor = None
             gc.collect()
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     for name in model.state_dict():
         if name not in linear_weights:

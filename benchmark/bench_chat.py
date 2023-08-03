@@ -53,7 +53,7 @@ def get_prompt(raw_dataset):
             out_data["content"] = data["text"]
             messages.append(out_data)
 
-        if messages[-1]["role"] == "gpt":
+        if messages[-1]["role"] == "assistant":
             messages = messages[:-1]
         
         prompt = "\n###".join([msg["role"] + ": " + msg["content"] for msg in messages]) + "\n### assistant: "
