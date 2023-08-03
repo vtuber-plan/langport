@@ -1,4 +1,4 @@
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 from langport.model.executor.generation import BaseStreamer
 
 from langport.model.executor.huggingface import HuggingfaceExecutor
@@ -14,6 +14,7 @@ from langport.protocol.worker_protocol import (
 import torch
 
 from transformers import PreTrainedModel, PreTrainedTokenizer
+from transformers.utils import is_optimum_available
 from transformers.generation.logits_process import (
     LogitsProcessor,
     LogitsProcessorList,
@@ -88,20 +89,28 @@ class BatchingTask:
         self.batch_tokens_cache: List[List[int]] = [[] for i in range(self.batch_size)]
         self.batch_tokens_probs_cache: List[List[float]] = [[] for i in range(self.batch_size)]
         self.batch_top_logprobs_cache: List[List[Dict[str, float]]] = [[] for i in range(self.batch_size)]
-        self.stop = [False for i in range(self.batch_size)]
+        self.stop: List[bool] = [False for i in range(self.batch_size)]
 
     def __len__(self):
         return self.batch_size
     
-    def __call__(self, return_attention_mask=True) -> Any:
-        ids = [torch.cat((self.prompts_ids[i], torch.LongTensor(self.batch_tokens_cache[i])))
-                         for i in range(self.batch_size)]
-        length = [len(i) for i in ids]
-        # padding to max(length)
-        full_input_ids = torch.full(
-            (self.batch_size, max(length)), self.pad_fill_id, dtype=torch.long, device=self.device
-        )
+    def __call__(self, return_attention_mask=True, full_batch=False) -> Any:
+        ids: List[torch.LongTensor] = []
+        length: List[int] = []
         for i in range(self.batch_size):
+            if not full_batch and self.is_stop(i):
+                continue
+            input_ids = torch.cat((self.prompts_ids[i], torch.LongTensor(self.batch_tokens_cache[i])))
+            ids.append(input_ids)
+            length.append(len(input_ids))
+        
+        dyn_batch_size = len(ids)
+        # padding to max(length)
+        full_input_ids: torch.LongTensor = torch.full(
+            (dyn_batch_size, max(length)), self.pad_fill_id,
+            dtype=torch.long, device=self.device
+        )
+        for i in range(dyn_batch_size):
             if self.is_encoder_decoder:
                 full_input_ids[i, :length[i]] = ids[i]
             else:
@@ -192,12 +201,12 @@ class BatchingTask:
         self._check_idx(idx)
         return self.stop[idx]
 
-
 class GenerationModel:
     def __init__(self, model: PreTrainedModel) -> None:
         self.model = model
     
     @torch.inference_mode()
+    @profile
     def generate(self, inputs: BatchingTask, 
                  max_new_tokens: int,
                  streamer: Optional[BaseStreamer]=None) -> torch.Tensor:
@@ -205,19 +214,29 @@ class GenerationModel:
         if inputs.batch_size == 0:
             return
 
-        full_input_ids, attention_mask = inputs()
+        full_input_ids, full_attention_mask = inputs(return_attention_mask=True, full_batch=True)
         if self.model.config.is_encoder_decoder:
-            encoder_outputs = self.model.encoder(input_ids=full_input_ids, attention_mask=attention_mask)
-            decoder_input_ids_list = [torch.full(
+            full_encoder_outputs = self.model.encoder(
+                input_ids=full_input_ids,
+                attention_mask=full_attention_mask,
+                output_attentions=False,
+                output_hidden_states=False,
+                return_dict=False,
+            )
+            decoder_input_ids_list: List[torch.LongTensor] = [torch.full(
                 (inputs.batch_size, 1),
                 self.model.generation_config.decoder_start_token_id,
                 dtype=torch.long,
                 device=self.model.device,
             )]
         else:
-            encoder_outputs = None
-            decoder_input_ids_list = [full_input_ids]
-        past_key_values = None
+            full_encoder_outputs = None
+            decoder_input_ids_list: List[torch.LongTensor] = [full_input_ids]
+        
+        encoder_outputs = full_encoder_outputs
+        attention_mask = full_attention_mask
+        past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = None
+        bacth_mapping: List[int] = list(range(inputs.batch_size)) # dynamic batch
 
         # step by step
         for step in range(max_new_tokens):
@@ -240,7 +259,7 @@ class GenerationModel:
                     dynamic_attention_mask = torch.cat(
                         (attention_mask, 
                         torch.ones(
-                            inputs.batch_size, step,
+                            attention_mask.shape[0], step,
                             dtype=torch.long, device=decoder_input_ids.device
                         )), dim=1
                     )
@@ -261,16 +280,17 @@ class GenerationModel:
             token_probs = [None] * inputs.batch_size
             top_logprobs = [None] * inputs.batch_size
 
-            for i, task in enumerate(inputs.tasks):
-                if inputs.is_stop(i):
+            for task_i, task in enumerate(inputs.tasks):
+                if inputs.is_stop(task_i):
                     new_ids.append(inputs.pad_fill_id)
                     continue
-                each_logits = logits[i, -1, :].unsqueeze(0)
+                batch_i = bacth_mapping[task_i]
+                each_logits = logits[batch_i, -1, :].unsqueeze(0)
 
-                logits_processor = inputs.get_logits_processor_list(i)
+                logits_processor = inputs.get_logits_processor_list(task_i)
                 if logits_processor:
                     if task.repetition_penalty > 1.0:
-                        tmp_output_ids = decoder_input_ids[i, :].unsqueeze(0)
+                        tmp_output_ids = decoder_input_ids[batch_i, :].unsqueeze(0)
                     else:
                         tmp_output_ids = None
                     last_token_logits = logits_processor(tmp_output_ids, each_logits)[0]
@@ -285,30 +305,87 @@ class GenerationModel:
                     token = int(torch.argmax(last_token_logits))
                 else:
                     probs = torch.softmax(last_token_logits, dim=-1)
-                    token = int(torch.multinomial(probs, num_samples=1))
+                    token = int(torch.multinomial(probs, num_samples=1).item())
                 
                 if task.logprobs is not None:
-                    token_probs[i] = each_logits[0, token].item()
+                    token_probs[task_i] = each_logits[0, token].item()
                     top_values, top_indices = torch.topk(each_logits[0, :], task.logprobs, dim=-1, largest=True, sorted=True)
                     item = {}
                     for top_i in range(len(top_values)):
                         item[top_indices[top_i].item()] = top_values[top_i].item()
-                    top_logprobs[i] = item
+                    top_logprobs[task_i] = item
                 new_ids.append(token)
             
+            is_stop_before = [s for s in inputs.stop]
             # update state
             inputs.update_new_token(new_ids, token_probs=token_probs, top_logprobs=top_logprobs)
             if streamer:
                 streamer.put(new_ids)
-
+            is_stop_after = [s for s in inputs.stop]
+            stop_event = is_stop_before != is_stop_after
+            
+            # setup next step input and cache
             if self.model.config.is_encoder_decoder or self.model.generation_config.use_cache:
                 # print("use cache!")
-                new_ids_tensor = torch.tensor(
-                    new_ids, dtype=torch.long, device=decoder_input_ids.device).unsqueeze(1)
+                dynamic_new_ids = [d for i, d in enumerate(new_ids) if not inputs.is_stop(i)]
+                new_ids_tensor = torch.tensor(dynamic_new_ids, dtype=torch.long, device=decoder_input_ids.device).unsqueeze(1)
                 decoder_input_ids_list = [new_ids_tensor]
             else:
-                decoder_input_ids = inputs(return_attention_mask=False)
+                decoder_input_ids = inputs(return_attention_mask=False, full_batch=False)
                 decoder_input_ids_list = [decoder_input_ids]
+            
+            # shrink encoder_outputs
+            if self.model.config.is_encoder_decoder and stop_event:
+                last_hidden_state = encoder_outputs[0]
+                new_pos = 0
+                for task_i in range(inputs.batch_size):
+                    if inputs.is_stop(task_i):
+                        continue
+                    src_pos = bacth_mapping[task_i]
+                    if src_pos != new_pos:
+                        last_hidden_state[new_pos, ...] = last_hidden_state[src_pos,...]
+                    new_pos += 1
+                last_hidden_state = last_hidden_state[:new_pos,...]
+                encoder_outputs = (last_hidden_state, )
+            
+            # clip cache
+            if stop_event:
+                shrink_past_key_values = []
+                for layer_i, layer in enumerate(past_key_values):
+                    layer_cache = []
+                    for cache_i, cache in enumerate(layer):
+                        new_pos = 0
+                        for task_i in range(inputs.batch_size):
+                            if inputs.is_stop(task_i):
+                                continue
+                            src_pos = bacth_mapping[task_i]
+                            if src_pos != new_pos:
+                                cache[new_pos, ...] = cache[src_pos,...]
+                            new_pos += 1
+                        layer_cache.append(cache[:new_pos,...])
+                    
+                    shrink_past_key_values.append(tuple(layer_cache))
+                past_key_values = tuple(shrink_past_key_values)
+            # clip attention_mask
+            if stop_event:
+                new_pos = 0
+                for task_i in range(inputs.batch_size):
+                    if inputs.is_stop(task_i):
+                        continue
+                    src_pos = bacth_mapping[task_i]
+                    if src_pos != new_pos:
+                        attention_mask[new_pos,...] = attention_mask[src_pos,...]
+                    new_pos += 1
+                attention_mask = attention_mask[:new_pos,...]
+            # update bacth mapping
+            if stop_event:
+                new_pos = 0
+                for task_i in range(inputs.batch_size):
+                    if inputs.is_stop(task_i):
+                        bacth_mapping[task_i] = -1
+                    else:
+                        bacth_mapping[task_i] = new_pos
+                        new_pos += 1
 
             if all(inputs.stop):
                 break
@@ -333,7 +410,12 @@ class GenerationWorkerStreamer(BaseStreamer):
         self.stream_interval = worker.stream_interval
 
         self.done = [False for i in range(task_batch.batch_size)]
+    
+    @cached(cache=LRUCache(maxsize=8192))
+    def convert_tokens_to_string(self, tokens: List[str]) -> str:
+        return self.tokenizer.convert_tokens_to_string(tokens)
 
+    @profile
     def put(self, value):
         for i in range(self.task_batch.batch_size):
             generated_len = self.task_batch.get_generated_length(i)
@@ -345,27 +427,38 @@ class GenerationWorkerStreamer(BaseStreamer):
 
             # text = self.tokenizer.decode(token_ids, skip_special_tokens=True)
             tokens = self.tokenizer.convert_ids_to_tokens(token_ids, skip_special_tokens=True)
-            text = self.tokenizer.convert_tokens_to_string(tokens)
+            text = self.convert_tokens_to_string(tuple(tokens))
 
             # get offset mapping from token to text
-            text_offset = []
-            for token_i in range(0, len(tokens)):
-                if token_i == 0:
-                    text_offset.append(-1)
-                    continue
-                prefix_text = self.tokenizer.convert_tokens_to_string(tokens[:token_i])
-                if text.startswith(prefix_text):
-                    text_offset.append(len(prefix_text))
-                else:
-                    text_offset.append(-1)
-            
-            last_id = len(text)
-            for token_i in reversed(range(0, len(tokens))):
-                if text_offset[token_i] == -1:
-                    text_offset[token_i] = last_id
-                else:
-                    last_id = text_offset[token_i]
-            
+            if self.tokenizer.is_fast:
+                text_offset = [-1] * len(tokens)
+                batch_encoding = self.tokenizer([text])
+                for token_i in range(len(tokens)):
+                    span = batch_encoding.token_to_chars(0, token_i)
+                    if span is None:
+                        continue
+                    start, end = span
+                    text_offset[token_i] = start
+            else:
+                text_offset = []
+                for token_i in range(0, len(tokens)):
+                    if token_i == 0:
+                        text_offset.append(-1)
+                        continue
+                    prefix_text = self.convert_tokens_to_string(tuple(tokens[:token_i]))
+                    if text.startswith(prefix_text):
+                        text_offset.append(len(prefix_text))
+                    else:
+                        text_offset.append(-1)
+                
+                last_id = len(text)
+                for token_i in reversed(range(0, len(tokens))):
+                    if text_offset[token_i] == -1:
+                        text_offset[token_i] = last_id
+                    else:
+                        last_id = text_offset[token_i]
+                
+            # get logprobs
             token_logprobs = self.task_batch.get_generated_token_probs(i)
             top_logprobs = self.task_batch.get_generated_top_logprobs(i)
             if top_logprobs is not None:

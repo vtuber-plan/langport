@@ -28,7 +28,6 @@ import psutil
 
 import torch
 from langport.model.compression import load_compress_model, default_compression_config, bit4_compression_config
-from langport.model.svd import load_svd_model
 from langport.model.executor.base import BaseModelExecutor
 from langport.model.model_adapter import get_model_adapter, raise_warning_for_incompatible_cpu_offloading_configuration
 from langport.model.monkey_patch_non_inplace import replace_llama_attn_with_non_inplace_operations
@@ -90,7 +89,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
             )
         else:
             trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
-            tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, trust_remote_code=trust_remote_code)
+            tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=trust_remote_code)
             model = AutoModelForCausalLM.from_pretrained(
                 model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
             )

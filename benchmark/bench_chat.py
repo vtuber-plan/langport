@@ -1,4 +1,5 @@
 import argparse
+import json
 import random
 import time
 import traceback
@@ -47,7 +48,7 @@ def get_prompt(raw_dataset):
             if data["user"] == "human":
                 out_data["role"] = "user"
             if data["user"] == "gpt":
-                out_data["role"] = "assitant"
+                out_data["role"] = "assistant"
             
             out_data["content"] = data["text"]
             messages.append(out_data)
@@ -75,6 +76,9 @@ def main(args):
     results = []
     for task in tqdm.tqdm(tasks):
       results.append(task.result())
+  
+  with open("benchmark_completion.txt", "w", encoding="utf-8") as f:
+    f.write(json.dumps(list(zip(dataset, results)), ensure_ascii=False))
 
   n_tokens = sum([ret[2] for ret in results])
   n_queries = sum([1 for ret in results if ret[2] != 0])
@@ -92,7 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("--model-name", type=str, default="vicuna")
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--total-task", type=int, default=200)
-    parser.add_argument("--n-thread", type=int, default=32)
+    parser.add_argument("--n-thread", type=int, default=2)
     parser.add_argument("--random-len", type=int, default=0)
     args = parser.parse_args()
 
