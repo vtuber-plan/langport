@@ -96,7 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("--model-name", type=str, default="vicuna")
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--total-task", type=int, default=200)
-    parser.add_argument("--n-thread", type=int, default=2)
+    parser.add_argument("--n-thread", type=int, default=4)
     parser.add_argument("--random-len", type=int, default=0)
     args = parser.parse_args()
 

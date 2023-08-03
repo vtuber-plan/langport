@@ -206,7 +206,6 @@ class GenerationModel:
         self.model = model
     
     @torch.inference_mode()
-    @profile
     def generate(self, inputs: BatchingTask, 
                  max_new_tokens: int,
                  streamer: Optional[BaseStreamer]=None) -> torch.Tensor:
@@ -305,7 +304,7 @@ class GenerationModel:
                     token = int(torch.argmax(last_token_logits))
                 else:
                     probs = torch.softmax(last_token_logits, dim=-1)
-                    token = int(torch.multinomial(probs, num_samples=1).item())
+                    token = int(torch.multinomial(probs, num_samples=1, replacement=True).item())
                 
                 if task.logprobs is not None:
                     token_probs[task_i] = each_logits[0, token].item()
@@ -415,7 +414,6 @@ class GenerationWorkerStreamer(BaseStreamer):
     def convert_tokens_to_string(self, tokens: List[str]) -> str:
         return self.tokenizer.convert_tokens_to_string(tokens)
 
-    @profile
     def put(self, value):
         for i in range(self.task_batch.batch_size):
             generated_len = self.task_batch.get_generated_length(i)
