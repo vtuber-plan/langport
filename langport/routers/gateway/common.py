@@ -119,7 +119,8 @@ async def _list_models(app_settings: AppSettings, feature: Optional[str], client
     models = [json.loads(obj) for obj in response.values]
     # No available worker
     if address_list == []:
-        raise ValueError(f"No available worker for feature {feature}")
+        # raise ValueError(f"No available worker for feature {feature}")
+        return []
 
     return models
 

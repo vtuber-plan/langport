@@ -21,6 +21,7 @@ class SeparatorStyle(Enum):
     PHOENIX = auto()
     CHATGLM = auto()
     LLAMA = auto()
+    CHATLM = auto()
 
 
 @dataclasses.dataclass
@@ -189,6 +190,18 @@ class ConversationHistory:
                     ret += inst + " " + message.strip() + " "
                 else:
                     ret += inst + " "
+            return ret
+        elif self.settings.sep_style == SeparatorStyle.CHATLM:
+            im_start, im_end = "<|im_start|>", "<|im_end|>"
+            ret = im_start + "system" + "\n" + self.system + im_end
+
+            for i, (role, message) in enumerate(self.messages):
+                ret += im_start
+                if message:
+                    ret += role + "\n" + message + self.settings.sep
+                    ret += im_end
+                else:
+                    ret += role + "\n"
             return ret
         else:
             raise ValueError(f"Invalid style: {self.settings.sep_style}")

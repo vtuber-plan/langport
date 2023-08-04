@@ -413,7 +413,37 @@ class GenerationWorkerStreamer(BaseStreamer):
     @cached(cache=LRUCache(maxsize=8192))
     def convert_tokens_to_string(self, tokens: List[str]) -> str:
         return self.tokenizer.convert_tokens_to_string(tokens)
-
+    
+    def get_text_offset(self, text: str, tokens: List[str]):
+        if self.tokenizer.is_fast:
+            text_offset = [-1] * len(tokens)
+            batch_encoding = self.tokenizer([text])
+            for token_i in range(len(tokens)):
+                span = batch_encoding.token_to_chars(0, token_i)
+                if span is None:
+                    continue
+                start, end = span
+                text_offset[token_i] = start
+        else:
+            text_offset = []
+            for token_i in range(0, len(tokens)):
+                if token_i == 0:
+                    text_offset.append(-1)
+                    continue
+                prefix_text = self.convert_tokens_to_string(tuple(tokens[:token_i]))
+                if text.startswith(prefix_text):
+                    text_offset.append(len(prefix_text))
+                else:
+                    text_offset.append(-1)
+            
+            last_id = len(text)
+            for token_i in reversed(range(0, len(tokens))):
+                if text_offset[token_i] == -1:
+                    text_offset[token_i] = last_id
+                else:
+                    last_id = text_offset[token_i]
+        return text_offset
+            
     def put(self, value):
         for i in range(self.task_batch.batch_size):
             generated_len = self.task_batch.get_generated_length(i)
@@ -423,39 +453,9 @@ class GenerationWorkerStreamer(BaseStreamer):
 
             token_ids = self.task_batch.get_generated_ids(i)
 
-            # text = self.tokenizer.decode(token_ids, skip_special_tokens=True)
-            tokens = self.tokenizer.convert_ids_to_tokens(token_ids, skip_special_tokens=True)
-            text = self.convert_tokens_to_string(tuple(tokens))
+            text = self.tokenizer.decode(token_ids, skip_special_tokens=True)
+            # text = self.convert_tokens_to_string(tuple(tokens))
 
-            # get offset mapping from token to text
-            if self.tokenizer.is_fast:
-                text_offset = [-1] * len(tokens)
-                batch_encoding = self.tokenizer([text])
-                for token_i in range(len(tokens)):
-                    span = batch_encoding.token_to_chars(0, token_i)
-                    if span is None:
-                        continue
-                    start, end = span
-                    text_offset[token_i] = start
-            else:
-                text_offset = []
-                for token_i in range(0, len(tokens)):
-                    if token_i == 0:
-                        text_offset.append(-1)
-                        continue
-                    prefix_text = self.convert_tokens_to_string(tuple(tokens[:token_i]))
-                    if text.startswith(prefix_text):
-                        text_offset.append(len(prefix_text))
-                    else:
-                        text_offset.append(-1)
-                
-                last_id = len(text)
-                for token_i in reversed(range(0, len(tokens))):
-                    if text_offset[token_i] == -1:
-                        text_offset[token_i] = last_id
-                    else:
-                        last_id = text_offset[token_i]
-                
             # get logprobs
             token_logprobs = self.task_batch.get_generated_token_probs(i)
             top_logprobs = self.task_batch.get_generated_top_logprobs(i)
@@ -468,27 +468,32 @@ class GenerationWorkerStreamer(BaseStreamer):
             # remove stop words
             stop_pos = stop_by_stopwords(text, 0, task.stop)
             if stop_pos != -1:
-                token_stop_pos = len(tokens)
-                for token_i in reversed(range(0, len(text_offset))):
-                    if text_offset[token_i] < stop_pos:
-                        token_stop_pos = token_i + 1
-                        break
-    
                 self.task_batch.set_stop(i)
 
                 # remove tokens after stop pos
                 text = text[:stop_pos]
-                tokens = tokens[:token_stop_pos]
-                if token_logprobs is not None:
-                    token_logprobs = token_logprobs[:token_stop_pos]
-                if top_logprobs is not None:
-                    top_logprobs = top_logprobs[:token_stop_pos]
-                text_offset = text_offset[:token_stop_pos]
             
             prompt_len = self.task_batch.get_prompt_length(i)
             
             # logprobs
             if self.task_batch.tasks[i].logprobs is not None:
+                tokens = self.tokenizer.convert_ids_to_tokens(token_ids, skip_special_tokens=True)
+                # get offset mapping from token to text
+                text_offset = self.get_text_offset(text, tokens)
+                if stop_pos != -1:
+                    token_stop_pos = len(tokens)
+                    for token_i in reversed(range(0, len(text_offset))):
+                        if text_offset[token_i] < stop_pos:
+                            token_stop_pos = token_i + 1
+                            break
+                    # remove tokens after stop pos
+                    tokens = tokens[:token_stop_pos]
+                    if token_logprobs is not None:
+                        token_logprobs = token_logprobs[:token_stop_pos]
+                    if top_logprobs is not None:
+                        top_logprobs = top_logprobs[:token_stop_pos]
+                    text_offset = text_offset[:token_stop_pos]
+
                 logprobs = GenerationWorkerLogprobs(
                     tokens=tokens,
                     token_logprobs=token_logprobs,
