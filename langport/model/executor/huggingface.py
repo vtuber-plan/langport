@@ -1,6 +1,8 @@
+from functools import partial
 from typing import Optional
 
 from langport.model.adapters.dolly_v2 import DollyV2Adapter
+from langport.model.adapters.qwen import QwenAdapter
 from langport.model.adapters.rwkv import RwkvAdapter
 from langport.model.adapters.t5 import T5Adapter
 from langport.model.adapters.text2vec import BertAdapter
@@ -87,6 +89,14 @@ class HuggingfaceExecutor(LocalModelExecutor):
             model = AutoModel.from_pretrained(
                 model_path, low_cpu_mem_usage=True, trust_remote_code=True, **from_pretrained_kwargs
             )
+        elif isinstance(adapter, QwenAdapter):
+            trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
+            tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=trust_remote_code)
+            model = AutoModelForCausalLM.from_pretrained(
+                model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
+            )
+            # allowed_special work around
+            tokenizer.tokenize = partial(tokenizer.tokenize, allowed_special="all")
         else:
             trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
             tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=trust_remote_code)

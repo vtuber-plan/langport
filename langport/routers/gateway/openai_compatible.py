@@ -41,6 +41,20 @@ from langport.protocol.worker_protocol import (
 from langport.core.dispatch import DispatchMethod
 from langport.routers.gateway.common import LANGPORT_HEADER, AppSettings, _get_worker_address, _list_models, check_model, check_requests, create_error_response
 
+def clean_system_prompts(messages: List[Dict[str, str]]):
+    system_prompt = ""
+    result = []
+    for i, message in enumerate(messages):
+        if i != 0 and message["role"] == "system":
+            system_prompt += message["content"] + "\n"
+            continue
+        result.append(message)
+    system_prompt = system_prompt.rstrip("\n")
+    if len(messages) > 0 and messages[0]["role"] == "system":
+        messages[0]["content"] += "\n" + system_prompt
+    else:
+        messages.insert(0, {"role": "system", "content": system_prompt})
+    return result
 
 def get_gen_params(
     model_name: str,
@@ -62,6 +76,7 @@ def get_gen_params(
     if isinstance(messages, str):
         prompt = messages
     else:
+        messages = clean_system_prompts(messages)
         for message in messages:
             msg_role = message["role"]
             if msg_role == "system":
