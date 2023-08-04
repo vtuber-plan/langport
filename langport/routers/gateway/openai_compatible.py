@@ -3,7 +3,7 @@ import asyncio
 import asyncio
 import json
 
-from typing import Generator, Optional, Union, Dict, List, Any
+from typing import Coroutine, Generator, Optional, Union, Dict, List, Any
 
 from fastapi.responses import StreamingResponse
 import httpx

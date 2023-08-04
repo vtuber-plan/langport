@@ -180,8 +180,9 @@ class ConversationHistory:
             system_a = ""
             ret = f"{B_INST} {system_q} {E_INST} {system_a}"
             for i, (role, message) in enumerate(self.messages):
-                if i % 2 == 0:
-                    inst = B_INST
+                if role == self.settings.roles[0]:
+                    if not(i != 0 and self.messages[i - 1][0] == self.settings.roles[0]):
+                        inst = B_INST
                 else:
                     inst = E_INST
                 if message:

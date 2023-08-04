@@ -1,6 +1,8 @@
 import argparse
+import datetime
 import json
 import logging
+import os
 
 from typing import Optional
 
@@ -11,7 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, DispatchFunction
 from starlette.types import ASGIApp
 import uvicorn
 
-from langport.constants import ErrorCode
+from langport.constants import LOGDIR, ErrorCode
 from fastapi.exceptions import RequestValidationError
 from langport.protocol.openai_api_protocol import (
     ChatCompletionRequest,
@@ -20,9 +22,10 @@ from langport.protocol.openai_api_protocol import (
 )
 from langport.routers.gateway.common import AppSettings, create_error_response
 from langport.routers.gateway.openai_compatible import api_chat_completions, api_completions, api_embeddings, api_models
+from langport.utils import build_logger
 
-logger = logging.getLogger(__name__)
-
+current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+logger = build_logger("openai_api", f"openai_api_{current_time}.log")
 app = fastapi.FastAPI(debug=False)
 
 class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
@@ -69,18 +72,23 @@ async def models():
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
     request.model = redirect_model_name(request.model)
-    return await api_chat_completions(app.app_settings, request)
+    response = await api_chat_completions(app.app_settings, request)
+    logger.info(request.json())
+    return response
 
 @app.post("/v1/completions")
 async def completions(request: CompletionRequest):
     request.model = redirect_model_name(request.model)
-    return await api_completions(app.app_settings, request)
+    response = await api_completions(app.app_settings, request)
+    logger.info(request.json())
+    return response
 
 
 @app.post("/v1/embeddings")
 async def embeddings(request: EmbeddingsRequest):
     request.model = redirect_model_name(request.model)
-    return await api_embeddings(app.app_settings, request)
+    response = await api_embeddings(app.app_settings, request)
+    return response
 
 
 if __name__ in ["__main__", "langport.service.gateway.openai_api"]:

@@ -90,7 +90,6 @@ async def generate(request: Request):
         )
     )
     if isinstance(response, JSONResponse):
-        print(response.body)
         return Response(generated_text="", details=Details(
             finish_reason=FinishReason.EndOfSequenceToken,
             generated_tokens=0,

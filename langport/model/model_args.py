@@ -45,3 +45,6 @@ def add_model_args(parser):
     parser.add_argument(
         "--trust-remote-code", action="store_true", help="Trust remote code"
     )
+    parser.add_argument(
+        "--sleep", type=int, default=0, help="Sleep after seconds"
+    )

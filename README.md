@@ -137,6 +137,12 @@ Run text generation with ggml worker:
 python -m langport.service.server.ggml_generation_worker --port 21001 --model-path <your model path> --gpu-layers <num layer to gpu (resize this for your VRAM)>
 ```
 
+Run OpenAI forward server: 
+```bash
+python -m langport.service.server.chatgpt_generation_worker --port 21001 --api-url <url> --api-key <key>
+```
+
+
 ## License
 
 langport is released under the Apache Software License.
