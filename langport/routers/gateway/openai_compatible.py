@@ -110,7 +110,10 @@ def get_gen_params(
 
 async def api_models(app_settings: AppSettings):
     async with httpx.AsyncClient() as client:
-        models = await _list_models(app_settings, None, client)
+        generation_models = await _list_models(app_settings, "generation", client)
+    async with httpx.AsyncClient() as client:
+        embedding_models = await _list_models(app_settings, "embedding", client)
+    models = generation_models + embedding_models
     models.sort()
     # TODO: return real model permission details
     model_cards = []
