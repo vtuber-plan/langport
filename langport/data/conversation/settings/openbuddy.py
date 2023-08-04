@@ -10,5 +10,5 @@ openbuddy = ConversationSettings(
     sep_style=SeparatorStyle.ADD_COLON_SINGLE,
     system_sep="\n\n",
     sep="\n",
-    stop_str="User:",
+    stop_str="\n</s>",
 )

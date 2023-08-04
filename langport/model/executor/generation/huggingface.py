@@ -453,7 +453,7 @@ class GenerationWorkerStreamer(BaseStreamer):
 
             token_ids = self.task_batch.get_generated_ids(i)
 
-            text = self.tokenizer.decode(token_ids, skip_special_tokens=True)
+            text = self.tokenizer.decode(token_ids, skip_special_tokens=False)
             # text = self.convert_tokens_to_string(tuple(tokens))
 
             # get logprobs

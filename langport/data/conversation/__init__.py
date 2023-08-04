@@ -203,7 +203,6 @@ class ConversationHistory:
                 ret += im_start
                 if message:
                     ret += role + "\n" + message + im_end + self.settings.sep
-                    ret += im_end
                 else:
                     ret += role + "\n"
             return ret

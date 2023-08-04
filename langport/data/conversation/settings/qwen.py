@@ -9,5 +9,5 @@ one_shot = ConversationSettings(
     roles=("user", "assistant"),
     sep_style=SeparatorStyle.CHATLM,
     sep="\n",
-    stop_str="\n<|im_end|>",
+    stop_str="<|im_end|>",
 )
