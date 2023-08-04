@@ -12,7 +12,7 @@ class QwenAdapter(BaseAdapter):
             model_path = model_path[:-1]
         dir_name = os.path.basename(model_path)
         parent_name = os.path.dirname(model_path)
-        return dir_name.startswith('qwen') or parent_name.startswith('qwen')
+        return dir_name.lower().startswith('qwen') or parent_name.lower().startswith('qwen')
 
     def get_default_conv_template(self, model_path: str) -> ConversationHistory:
         settings = get_conv_settings("qwen")

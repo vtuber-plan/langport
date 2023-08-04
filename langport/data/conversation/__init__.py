@@ -194,11 +194,15 @@ class ConversationHistory:
         elif self.settings.sep_style == SeparatorStyle.CHATLM:
             im_start, im_end = "<|im_start|>", "<|im_end|>"
             ret = im_start + "system" + "\n" + self.system + im_end
+            if self.settings.system_sep is not None:
+                ret += self.settings.system_sep
+            else:
+                ret += self.settings.sep
 
             for i, (role, message) in enumerate(self.messages):
                 ret += im_start
                 if message:
-                    ret += role + "\n" + message + self.settings.sep
+                    ret += role + "\n" + message + im_end + self.settings.sep
                     ret += im_end
                 else:
                     ret += role + "\n"
