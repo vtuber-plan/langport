@@ -1,8 +1,6 @@
 
-
 import time
 from typing import Any
-
 
 class CacheState(object):
     def __init__(self, value: Any, ttl: int) -> None:

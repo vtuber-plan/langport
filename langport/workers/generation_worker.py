@@ -19,7 +19,6 @@ from langport.constants import (
 )
 from langport.utils import server_error_msg, pretty_print_semaphore
 
-
 class GenerationModelWorker(ClusterWorker):
     def __init__(
         self,
@@ -42,7 +41,7 @@ class GenerationModelWorker(ClusterWorker):
             logger=logger,
         )
         self.executor = executor
-        workers = max(1, 2 * self.limit_model_concurrency // self.max_batch)
+        workers = max(1, self.limit_model_concurrency)
         self.add_timer(
             "generation_inference",
             GENERATION_INFERENCE_INTERVAL,

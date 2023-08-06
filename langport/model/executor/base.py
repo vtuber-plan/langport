@@ -1,6 +1,4 @@
-
 from typing import List, Optional
-
 
 class BaseModelExecutor(object):
     def __init__(
@@ -15,8 +13,6 @@ class BaseModelExecutor(object):
 
     def tokenize(self, text: str) -> List[int]:
         raise NotImplementedError("executor tokenizer method is not implemented.")
-
-
 
 class LocalModelExecutor(BaseModelExecutor):
     def __init__(
@@ -46,7 +42,6 @@ class LocalModelExecutor(BaseModelExecutor):
 
     def tokenize(self, text: str) -> List[int]:
         raise NotImplementedError("executor tokenizer method is not implemented.")
-
 
 class RemoteModelExecutor(BaseModelExecutor):
     def __init__(

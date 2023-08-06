@@ -1,6 +1,9 @@
+from functools import partial
 from typing import Optional
 
 from langport.model.adapters.dolly_v2 import DollyV2Adapter
+from langport.model.adapters.openbuddy import OpenBuddyAdapter
+from langport.model.adapters.qwen import QwenAdapter
 from langport.model.adapters.rwkv import RwkvAdapter
 from langport.model.adapters.t5 import T5Adapter
 from langport.model.adapters.text2vec import BertAdapter
@@ -28,7 +31,6 @@ import psutil
 
 import torch
 from langport.model.compression import load_compress_model, default_compression_config, bit4_compression_config
-from langport.model.svd import load_svd_model
 from langport.model.executor.base import BaseModelExecutor
 from langport.model.model_adapter import get_model_adapter, raise_warning_for_incompatible_cpu_offloading_configuration
 from langport.model.monkey_patch_non_inplace import replace_llama_attn_with_non_inplace_operations
@@ -88,9 +90,23 @@ class HuggingfaceExecutor(LocalModelExecutor):
             model = AutoModel.from_pretrained(
                 model_path, low_cpu_mem_usage=True, trust_remote_code=True, **from_pretrained_kwargs
             )
+        elif isinstance(adapter, QwenAdapter):
+            trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
+            tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=trust_remote_code)
+            model = AutoModelForCausalLM.from_pretrained(
+                model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
+            )
+            # allowed_special work around
+            tokenizer.tokenize = partial(tokenizer.tokenize, allowed_special="all")
+        elif isinstance(adapter, OpenBuddyAdapter):
+            trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
+            tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=trust_remote_code)
+            model = AutoModelForCausalLM.from_pretrained(
+                model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
+            ) # , offload_folder="offload"
         else:
             trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
-            tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, trust_remote_code=trust_remote_code)
+            tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=trust_remote_code)
             model = AutoModelForCausalLM.from_pretrained(
                 model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
             )
@@ -107,6 +123,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
         cpu_offloading: bool = False,
         deepspeed: bool = False,
         trust_remote_code: bool = False,
+        offload_folder: Optional[str] = None,
         debug: bool = False,
     ):
         """Load a model from Hugging Face."""
@@ -141,6 +158,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
             raise ValueError(f"Invalid device: {device}")
 
         kwargs["trust_remote_code"] = trust_remote_code
+        kwargs["offload_folder"] = offload_folder
 
         if cpu_offloading:
             # raises an error on incompatible platforms

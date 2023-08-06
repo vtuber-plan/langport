@@ -53,7 +53,7 @@ async def api_completion_stream(request: Request):
     generator = app.node.generation_bytes_stream(GenerationTask(
         prompt=params["prompt"],
         temperature=params.get("temperature", 1.0),
-        repetition_penalty=params.get("repetition_penalty", 0.0),
+        repetition_penalty=params.get("presence_penalty", 0.0),
         top_p=params.get("top_p", 1.0),
         top_k=params.get("top_k", 1),
         max_tokens=params.get("max_tokens", 512),
@@ -73,7 +73,7 @@ async def api_completion(request: Request):
     generator = await app.node.generation_stream(GenerationTask(
         prompt=params["prompt"],
         temperature=params.get("temperature", 1.0),
-        repetition_penalty=params.get("repetition_penalty", 0.0),
+        repetition_penalty=params.get("presence_penalty", 0.0),
         top_p=params.get("top_p", 1.0),
         top_k=params.get("top_k", 1),
         max_tokens=params.get("max_tokens", 512),
