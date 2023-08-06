@@ -443,7 +443,7 @@ class GenerationWorkerStreamer(BaseStreamer):
                 else:
                     last_id = text_offset[token_i]
         return text_offset
-            
+    
     def put(self, value):
         for i in range(self.task_batch.batch_size):
             generated_len = self.task_batch.get_generated_length(i)
@@ -576,7 +576,8 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         quantization: Optional[str],
         cpu_offloading: bool,
         deepspeed: bool = False,
-        trust_remote_code: bool = False
+        trust_remote_code: bool = False,
+        offload_folder: Optional[str] = None,
     ) -> None:
         super(HuggingfaceGenerationExecutor, self).__init__(
             model_name=model_name,
@@ -591,7 +592,7 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         self.model = None
         self.tokenizer = None
         self.adapter, self.model, self.tokenizer = self.load_model(
-            model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading, deepspeed, trust_remote_code
+            model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading, deepspeed, trust_remote_code, offload_folder
         )
 
         # self.model = torch.compile(self.model)

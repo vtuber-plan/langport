@@ -32,12 +32,14 @@ def add_model_args(parser):
         "--load-4bit", action="store_true", help="Use 4-bit quantization"
     )
     parser.add_argument(
-        "--svd", action="store_true", help="Use SVD"
-    )
-    parser.add_argument(
         "--cpu-offloading",
         action="store_true",
         help="Only when using 8-bit quantization: Offload excess weights to the CPU that don't fit on the GPU",
+    )
+    parser.add_argument(
+        "--offload-folder",
+        type=str, default=None,
+        help="If the device_map contains any value \"disk\", the folder where we will offload weights",
     )
     parser.add_argument(
         "--deepspeed", action="store_true", help="Use deepspeed"

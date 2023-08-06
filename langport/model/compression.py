@@ -49,6 +49,7 @@ class CLinear(nn.Module):
     config: CompressionConfig
     weight: Union[Tensor, Tuple]
     bias: Tensor
+
     def __init__(self, compression_config: CompressionConfig, weight=None, bias=None, device=None):
         super().__init__()
         self.config = compression_config
@@ -59,14 +60,18 @@ class CLinear(nn.Module):
         else:
             self.weight = weight
         self.bias = bias
-        self.use_cupy = cupy_available
+        self.bias_dtype = {}
 
     def forward(self, input: Tensor) -> Tensor:
         weight = decompress(self.weight, self.config, input.dtype)
-        if self.bias is not None:
-            bias = self.bias.to(input.dtype)
+        if input.dtype in self.bias_dtype:
+            bias = self.bias_dtype[input.dtype]
         else:
-            bias = self.bias
+            if self.bias is not None:
+                bias = self.bias.to(input.dtype)
+                self.bias_dtype[input.dtype] = bias
+            else:
+                bias = self.bias
         return F.linear(input, weight, bias)
     
     def extra_repr(self) -> str:
@@ -219,9 +224,9 @@ def compress(tensor, config):
     if num_bits >= 8:
         if symmetric:
             mn = None
-            scale = B / torch.max(data.abs(), dim=group_dim + 1, keepdim=True)[0]
+            scale = B * torch.max(data.abs(), dim=group_dim + 1, keepdim=True)[0].pow_(-1)
             data = data * scale
-            data = data.clamp_(-B, B).round_().to(torch.int8)
+            data = data.clamp_(-B, B).round_().type(torch.int8)
         else:
             mn = torch.min(data, dim=group_dim + 1, keepdim=True)[0]
             mx = torch.max(data, dim=group_dim + 1, keepdim=True)[0]
@@ -229,7 +234,7 @@ def compress(tensor, config):
             scale = B / (mx - mn)
             data = data - mn
             data.mul_(scale)
-            data = data.clamp_(0, B).round_().to(torch.uint8)
+            data = data.clamp_(0, B).round_().type(torch.uint8)
 
         inv_scale = 1.0 / scale
         return data, mn, inv_scale, original_shape
@@ -257,7 +262,7 @@ def compress(tensor, config):
         right_half = [slice(None) for i in new_shape]
         right_half[group_dim + 1] = slice(group_size//2, group_size)
         final_data.bitwise_or_(data[right_half])
-        
+
         inv_scale = 1.0 / scale
         return final_data, mn, inv_scale, original_shape
     else:
@@ -322,8 +327,8 @@ def decompress(packed_data, config, dtype=torch.float32):
         # Dequantize
         if symmetric:
             # data = data.to(dtype) * inv_scale.to(dtype)
-            data = data.to(dtype)
-            data = data.mul_(inv_scale)
+            data = data.type(dtype)
+            data.mul_(inv_scale)
         else:
             data = data.to(dtype)
             data = data.mul_(inv_scale).add_(mn)
