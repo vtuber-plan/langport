@@ -15,6 +15,7 @@ class SeparatorStyle(Enum):
     ADD_COLON_TWO = auto()
     ADD_COLON_SPACE_SINGLE = auto()
     NO_COLON_SINGLE = auto()
+    NO_COLON_TWO = auto()
     ADD_NEW_LINE_SINGLE = auto()
     DOLLY = auto()
     RWKV = auto()
@@ -114,6 +115,15 @@ class ConversationHistory:
                     ret += round_sep
                 if message:
                     ret += role + message + self.settings.sep
+                else:
+                    ret += role
+            return ret
+        elif self.settings.sep_style == SeparatorStyle.NO_COLON_TWO:
+            seps = [self.settings.sep, self.settings.sep2]
+            ret = self.system
+            for i, (role, message) in enumerate(self.messages):
+                if message:
+                    ret += role + message + seps[i % 2]
                 else:
                     ret += role
             return ret

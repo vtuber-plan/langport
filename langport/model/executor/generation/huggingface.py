@@ -182,9 +182,9 @@ class BatchingTask:
 
             # auto check stop
             if token == self.tokenizer.eos_token_id:
-                self.set_stop(i)
+                self.set_stop(max(i-1, 0))
             if self.tasks[i].stop_token_ids is not None and token in self.tasks[i].stop_token_ids:
-                self.set_stop(i)
+                self.set_stop(max(i-1, 0))
             if self.get_generated_length(i) == self.max_tokens[i]:
                 self.set_stop(i)
             
@@ -348,7 +348,7 @@ class GenerationModel:
                 encoder_outputs = (last_hidden_state, )
             
             # clip cache
-            if stop_event:
+            if stop_event and past_key_values is not None:
                 shrink_past_key_values = []
                 for layer_i, layer in enumerate(past_key_values):
                     layer_cache = []
@@ -366,7 +366,7 @@ class GenerationModel:
                     shrink_past_key_values.append(tuple(layer_cache))
                 past_key_values = tuple(shrink_past_key_values)
             # clip attention_mask
-            if stop_event:
+            if stop_event and attention_mask is not None:
                 new_pos = 0
                 for task_i in range(inputs.batch_size):
                     if inputs.is_stop(task_i):
@@ -594,6 +594,7 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         self.adapter, self.model, self.tokenizer = self.load_model(
             model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading, deepspeed, trust_remote_code, offload_folder
         )
+        self.model.eval()
 
         # self.model = torch.compile(self.model)
 

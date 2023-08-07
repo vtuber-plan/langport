@@ -13,5 +13,6 @@ internlm = ConversationSettings(
     system_sep="",
     sep="<eoh>\n",
     sep2="<eoa>\n",
-    stop_str="<eoa>"
+    stop_str="<eoa>",
+    stop_token_ids=[1, 2]
 )
