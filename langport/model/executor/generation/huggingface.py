@@ -182,9 +182,9 @@ class BatchingTask:
 
             # auto check stop
             if token == self.tokenizer.eos_token_id:
-                self.set_stop(max(i-1, 0))
+                self.set_stop(i)
             if self.tasks[i].stop_token_ids is not None and token in self.tasks[i].stop_token_ids:
-                self.set_stop(max(i-1, 0))
+                self.set_stop(i)
             if self.get_generated_length(i) == self.max_tokens[i]:
                 self.set_stop(i)
             
@@ -452,6 +452,14 @@ class GenerationWorkerStreamer(BaseStreamer):
             task = self.task_batch.tasks[i]
 
             token_ids = self.task_batch.get_generated_ids(i)
+
+            if len(token_ids) != 0:
+                last_token = token_ids[-1]
+                if last_token == self.tokenizer.eos_token_id:
+                    token_ids = token_ids[:-1]
+                tasks = self.task_batch.tasks
+                if tasks[i].stop_token_ids is not None and last_token in tasks[i].stop_token_ids:
+                    token_ids = token_ids[:-1]
 
             text = self.tokenizer.decode(token_ids, skip_special_tokens=False)
             # text = self.convert_tokens_to_string(tuple(tokens))
