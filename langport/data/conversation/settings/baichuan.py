@@ -3,9 +3,11 @@ from langport.data.conversation import (
     SeparatorStyle,
 )
 
-
-# Baize default template
-baize = ConversationSettings(
+"""
+https://huggingface.co/baichuan-inc/Baichuan-13B-Chat/blob/main/modeling_baichuan.py#L555
+"""
+# Baichuan default template
+baichuan = ConversationSettings(
     name="baichuan",
     roles=(" <reserved_102> ", " <reserved_103> "),
     sep_style=SeparatorStyle.NO_COLON_TWO,
