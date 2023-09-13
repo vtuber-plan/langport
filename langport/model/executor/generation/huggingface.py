@@ -76,6 +76,9 @@ class BatchingTask:
             self.pad_fill_id = self.tokenizer.eos_token_id
         else:
             self.pad_fill_id = self.tokenizer.pad_token_id
+        
+        if self.pad_fill_id is None:
+            self.pad_fill_id = 0
 
         # init logits_processor
         self.logits_processor_list = []
@@ -259,7 +262,7 @@ class GenerationModel:
                         (attention_mask, 
                         torch.ones(
                             attention_mask.shape[0], step,
-                            dtype=torch.long, device=decoder_input_ids.device
+                            dtype=torch.long, device=attention_mask.device
                         )), dim=1
                     )
                 else:
@@ -304,7 +307,7 @@ class GenerationModel:
                     token = int(torch.argmax(last_token_logits))
                 else:
                     probs = torch.softmax(last_token_logits, dim=-1)
-                    token = int(torch.multinomial(probs, num_samples=1, replacement=True).item())
+                    token = int(torch.multinomial(probs, num_samples=2, replacement=True)[0].item())
                 
                 if task.logprobs is not None:
                     token_probs[task_i] = each_logits[0, token].item()
