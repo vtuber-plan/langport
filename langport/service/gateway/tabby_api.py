@@ -140,6 +140,8 @@ if __name__ in ["__main__", "langport.service.gateway.tabby_api"]:
     parser.add_argument(
         "--allowed-headers", type=json.loads, default=["*"], help="allowed headers"
     )
+    parser.add_argument("--ssl-key", type=str, default=None)
+    parser.add_argument("--ssl-cert", type=str, default=None)
     args = parser.parse_args()
 
     app.add_middleware(
@@ -167,4 +169,6 @@ if __name__ in ["__main__", "langport.service.gateway.tabby_api"]:
             port=args.port,
             log_level="info",
             reload=True,
+            ssl_keyfile=args.ssl_key,
+            ssl_certfile=args.ssl_cert,
         )

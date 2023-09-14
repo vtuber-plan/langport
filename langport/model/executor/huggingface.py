@@ -122,6 +122,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
         quantization: Optional[str] = None,
         cpu_offloading: bool = False,
         deepspeed: bool = False,
+        gptq: bool = False,
         trust_remote_code: bool = False,
         offload_folder: Optional[str] = None,
         debug: bool = False,
@@ -175,24 +176,60 @@ class HuggingfaceExecutor(LocalModelExecutor):
             # Load model
             model, tokenizer = self._load_hf_model(adapter, model_path, kwargs)
         elif quantization is not None:
-            if num_gpus != 1:
-                warnings.warn(
-                    "n-bit quantization is not supported for multi-gpu inference."
-                )
-            else:
-                if "8" in quantization:
-                    model, tokenizer = load_compress_model(
-                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=default_compression_config, trust_remote_code=trust_remote_code
+            if gptq:
+                from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
+                tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, **kwargs)
+                if "4" in quantization:
+                    quantize_config = BaseQuantizeConfig(
+                        bits=4,  # quantize model to 4-bit
+                        group_size=128,  # it is recommended to set the value to 128
+                        desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
                     )
-                elif "4" in quantization:
-                    model, tokenizer = load_compress_model(
-                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=bit4_compression_config, trust_remote_code=trust_remote_code
+                elif "8" in quantization:
+                    quantize_config = BaseQuantizeConfig(
+                        bits=8,  # quantize model to 4-bit
+                        group_size=128,  # it is recommended to set the value to 128
+                        desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
                     )
                 else:
-                    model, tokenizer = load_compress_model(
-                        model_path=model_path, device=device, torch_dtype=kwargs["torch_dtype"], compression_config=default_compression_config, trust_remote_code=trust_remote_code
+                    quantize_config = BaseQuantizeConfig(
+                        bits=8,  # quantize model to 4-bit
+                        group_size=128,  # it is recommended to set the value to 128
+                        desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
                     )
-                # return adapter, model, tokenizer
+                # load un-quantized model, by default, the model will always be loaded into CPU memory
+                model = AutoGPTQForCausalLM.from_pretrained(model_path, quantize_config, **kwargs)
+            else:
+                if num_gpus != 1:
+                    warnings.warn(
+                        "n-bit quantization is not supported for multi-gpu inference."
+                    )
+                    if "8" in quantization:
+                        model, tokenizer = load_compress_model(
+                            model_path=model_path, device="auto", compression_config=default_compression_config, **kwargs
+                        )
+                    elif "4" in quantization:
+                        model, tokenizer = load_compress_model(
+                            model_path=model_path, device="auto", compression_config=bit4_compression_config, **kwargs
+                        )
+                    else:
+                        model, tokenizer = load_compress_model(
+                            model_path=model_path, device="auto", compression_config=default_compression_config, **kwargs
+                        )
+                else:
+                    if "8" in quantization:
+                        model, tokenizer = load_compress_model(
+                            model_path=model_path, device=device, compression_config=default_compression_config, **kwargs
+                        )
+                    elif "4" in quantization:
+                        model, tokenizer = load_compress_model(
+                            model_path=model_path, device=device, compression_config=bit4_compression_config, **kwargs
+                        )
+                    else:
+                        model, tokenizer = load_compress_model(
+                            model_path=model_path, device=device, compression_config=default_compression_config, **kwargs
+                        )
+                    # return adapter, model, tokenizer
         else:
             # Load model
             model, tokenizer = self._load_hf_model(adapter, model_path, kwargs)
