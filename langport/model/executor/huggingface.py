@@ -15,6 +15,7 @@ from langport.model.executor.base import LocalModelExecutor
 import torch
 
 from transformers import (
+    AutoConfig,
     AutoModelForCausalLM,
     AutoModel,
     AutoTokenizer,
@@ -24,6 +25,9 @@ from transformers import (
     BertModel,
 )
 
+from transformers.utils.quantization_config import QuantizationMethod
+from accelerate.utils import get_balanced_memory, infer_auto_device_map
+from accelerate import init_empty_weights
 
 import math
 from typing import Optional
@@ -106,6 +110,28 @@ class HuggingfaceExecutor(LocalModelExecutor):
                 model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
             ) # , offload_folder="offload"
         else:
+            # GPTQ quanted mode work around
+            config = AutoConfig.from_pretrained(model_path)
+            if hasattr(config, "quantization_config"):
+                quantization_method_from_config = config.quantization_config.get(
+                    "quant_method", QuantizationMethod.BITS_AND_BYTES
+                )
+                if quantization_method_from_config == QuantizationMethod.GPTQ:
+                    no_split_module_classes = ["LlamaDecoderLayer", "GPTJBlock", "GPT2Block", "GPTBigCodeBlock", "GPTNeoBlock"]
+                    device_map = from_pretrained_kwargs.get("device_map", "auto")
+                    if config.quantization_config.get("bits", None) == 4:
+                        torch_dtype = torch.quint4x2
+                    elif config.quantization_config.get("bits", None) == 8:
+                        torch_dtype = torch.int8
+                    else:
+                        torch_dtype = torch.int8
+                    with init_empty_weights():
+                        model = AutoModelForCausalLM.from_config(config)
+                    device_map = infer_auto_device_map(
+                        model, max_memory=None, no_split_module_classes=no_split_module_classes, dtype=torch_dtype
+                    )
+                    from_pretrained_kwargs["device_map"] = device_map
+                    
             trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
             tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=trust_remote_code)
             model = AutoModelForCausalLM.from_pretrained(
@@ -161,10 +187,8 @@ class HuggingfaceExecutor(LocalModelExecutor):
             raise ValueError(f"Invalid device: {device}")
 
         kwargs["trust_remote_code"] = trust_remote_code
-        kwargs["offload_folder"] = offload_folder
-
-        if gptq and quantization is None:
-            kwargs["disable_exllama"] = True
+        if offload_folder is not None:
+            kwargs["offload_folder"] = offload_folder
 
         if cpu_offloading:
             # raises an error on incompatible platforms
@@ -184,6 +208,8 @@ class HuggingfaceExecutor(LocalModelExecutor):
             if group_size is None:
                 group_size = 128
             if gptq:
+                if quantization is None:
+                    quantization = "8bit"
                 import datasets
                 from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
                 if "gptq" in model_path.lower():
@@ -213,7 +239,8 @@ class HuggingfaceExecutor(LocalModelExecutor):
                             desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
                         )
                     # load un-quantized model, by default, the model will always be loaded into CPU memory
-                    temp_kwargs = {k: v for k,v in kwargs.items() if k not in ["max_memory", "device_map"]}
+                    # temp_kwargs = {k: v for k,v in kwargs.items() if k not in ["max_memory", "device_map"]}
+                    temp_kwargs = {k: v for k,v in kwargs.items()}
                     model = AutoGPTQForCausalLM.from_pretrained(model_path, quantize_config, low_cpu_mem_usage=True, **temp_kwargs)
                     quant_dataset = datasets.load_dataset("Vtuber-plan/quantdata-10k")
                     train_quant_dataset = quant_dataset["train"]
