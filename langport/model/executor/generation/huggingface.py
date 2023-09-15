@@ -76,6 +76,9 @@ class BatchingTask:
             self.pad_fill_id = self.tokenizer.eos_token_id
         else:
             self.pad_fill_id = self.tokenizer.pad_token_id
+        
+        if self.pad_fill_id is None:
+            self.pad_fill_id = 0
 
         # init logits_processor
         self.logits_processor_list = []
@@ -259,7 +262,7 @@ class GenerationModel:
                         (attention_mask, 
                         torch.ones(
                             attention_mask.shape[0], step,
-                            dtype=torch.long, device=decoder_input_ids.device
+                            dtype=torch.long, device=attention_mask.device
                         )), dim=1
                     )
                 else:
@@ -304,7 +307,7 @@ class GenerationModel:
                     token = int(torch.argmax(last_token_logits))
                 else:
                     probs = torch.softmax(last_token_logits, dim=-1)
-                    token = int(torch.multinomial(probs, num_samples=1, replacement=True).item())
+                    token = int(torch.multinomial(probs, num_samples=2, replacement=True)[0].item())
                 
                 if task.logprobs is not None:
                     token_probs[task_i] = each_logits[0, token].item()
@@ -348,7 +351,7 @@ class GenerationModel:
                 encoder_outputs = (last_hidden_state, )
             
             # clip cache
-            if stop_event:
+            if stop_event and past_key_values is not None:
                 shrink_past_key_values = []
                 for layer_i, layer in enumerate(past_key_values):
                     layer_cache = []
@@ -366,7 +369,7 @@ class GenerationModel:
                     shrink_past_key_values.append(tuple(layer_cache))
                 past_key_values = tuple(shrink_past_key_values)
             # clip attention_mask
-            if stop_event:
+            if stop_event and attention_mask is not None:
                 new_pos = 0
                 for task_i in range(inputs.batch_size):
                     if inputs.is_stop(task_i):
@@ -452,6 +455,14 @@ class GenerationWorkerStreamer(BaseStreamer):
             task = self.task_batch.tasks[i]
 
             token_ids = self.task_batch.get_generated_ids(i)
+
+            if len(token_ids) != 0:
+                last_token = token_ids[-1]
+                if last_token == self.tokenizer.eos_token_id:
+                    token_ids = token_ids[:-1]
+                tasks = self.task_batch.tasks
+                if tasks[i].stop_token_ids is not None and last_token in tasks[i].stop_token_ids:
+                    token_ids = token_ids[:-1]
 
             text = self.tokenizer.decode(token_ids, skip_special_tokens=False)
             # text = self.convert_tokens_to_string(tuple(tokens))
@@ -576,6 +587,7 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         quantization: Optional[str],
         cpu_offloading: bool,
         deepspeed: bool = False,
+        gptq: bool = False,
         trust_remote_code: bool = False,
         offload_folder: Optional[str] = None,
     ) -> None:
@@ -592,8 +604,9 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         self.model = None
         self.tokenizer = None
         self.adapter, self.model, self.tokenizer = self.load_model(
-            model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading, deepspeed, trust_remote_code, offload_folder
+            model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading, deepspeed, gptq, trust_remote_code, offload_folder
         )
+        self.model.eval()
 
         # self.model = torch.compile(self.model)
 

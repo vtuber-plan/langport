@@ -7,13 +7,13 @@ class BaichuanAdapter(BaseAdapter):
     """The model adapter for baichuan-inc/baichuan-7B"""
 
     def match(self, model_path: str):
-        return "baichuan" in model_path
+        return "baichuan" in model_path.lower()
 
     def get_default_conv_template(self, model_path: str) -> ConversationHistory:
-        settings = get_conv_settings("one_shot")
+        settings = get_conv_settings("baichuan")
         return ConversationHistory(
             system="",
-            messages=(),
+            messages=[],
             offset=0,
             settings=settings,
         )

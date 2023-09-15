@@ -13,10 +13,10 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = [
-    "accelerate", "fastapi", "httpx", "numpy", "pydantic", "requests",
+    "accelerate>=0.22.0", "fastapi", "httpx", "numpy", "pydantic", "requests",
     "rich>=10.0.0", "sentencepiece",
-    "shortuuid", "shortuuid", "tokenizers>=0.12.1", "torch",
-    "transformers>=4.28.0,<4.29.0", "uvicorn", "wandb", "tenacity>=8.2.2",
+    "shortuuid", "tokenizers>=0.12.1", "torch",
+    "transformers>=4.33.1", "uvicorn", "wandb", "tenacity>=8.2.2",
 ]
 
 [project.optional-dependencies]

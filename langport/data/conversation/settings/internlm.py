@@ -10,8 +10,8 @@ internlm = ConversationSettings(
     roles=("<|User|>", "<|Bot|>"),
     sep_style=SeparatorStyle.ADD_COLON_TWO,
     round_sep="<s>",
-    system_sep="",
     sep="<eoh>\n",
     sep2="<eoa>\n",
-    stop_str="<eoa>"
+    stop_str="<eoa>",
+    stop_token_ids=[1, 2]
 )

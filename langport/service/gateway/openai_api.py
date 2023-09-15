@@ -114,6 +114,8 @@ if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
         "--allowed-headers", type=json.loads, default=["*"], help="allowed headers"
     )
     parser.add_argument("--redirect", action="append", required=False, help="redirect model_name to another model_name, e.g. --redirect model_name1:model_name2")
+    parser.add_argument("--ssl-key", type=str, default=None)
+    parser.add_argument("--ssl-cert", type=str, default=None)
     args = parser.parse_args()
 
     app.add_middleware(
@@ -142,4 +144,6 @@ if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
             port=args.port,
             log_level="info",
             reload=False,
+            ssl_keyfile=args.ssl_key,
+            ssl_certfile=args.ssl_cert,
         )
