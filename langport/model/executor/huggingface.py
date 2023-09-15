@@ -1,4 +1,5 @@
 from functools import partial
+import os
 from typing import Optional
 
 from langport.model.adapters.dolly_v2 import DollyV2Adapter
@@ -123,6 +124,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
         cpu_offloading: bool = False,
         deepspeed: bool = False,
         gptq: bool = False,
+        group_size: Optional[int] = None,
         trust_remote_code: bool = False,
         offload_folder: Optional[str] = None,
         debug: bool = False,
@@ -176,29 +178,46 @@ class HuggingfaceExecutor(LocalModelExecutor):
             # Load model
             model, tokenizer = self._load_hf_model(adapter, model_path, kwargs)
         elif quantization is not None:
+            if group_size is None:
+                group_size = 128
             if gptq:
+                import datasets
                 from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
-                tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, **kwargs)
-                if "4" in quantization:
-                    quantize_config = BaseQuantizeConfig(
-                        bits=4,  # quantize model to 4-bit
-                        group_size=128,  # it is recommended to set the value to 128
-                        desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
-                    )
-                elif "8" in quantization:
-                    quantize_config = BaseQuantizeConfig(
-                        bits=8,  # quantize model to 4-bit
-                        group_size=128,  # it is recommended to set the value to 128
-                        desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
-                    )
+                if "gptq" in model_path.lower():
+                    tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, **kwargs)
+                    model = AutoGPTQForCausalLM.from_quantized(model_path, **kwargs)
                 else:
-                    quantize_config = BaseQuantizeConfig(
-                        bits=8,  # quantize model to 4-bit
-                        group_size=128,  # it is recommended to set the value to 128
-                        desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
-                    )
-                # load un-quantized model, by default, the model will always be loaded into CPU memory
-                model = AutoGPTQForCausalLM.from_pretrained(model_path, quantize_config, **kwargs)
+                    tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, **kwargs)
+                    if "4" in quantization:
+                        quantize_config = BaseQuantizeConfig(
+                            bits=4,  # quantize model to 4-bit
+                            group_size=group_size,  # it is recommended to set the value to 128
+                            desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
+                        )
+                    elif "8" in quantization:
+                        quantize_config = BaseQuantizeConfig(
+                            bits=8,  # quantize model to 4-bit
+                            group_size=group_size,  # it is recommended to set the value to 128
+                            desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
+                        )
+                    else:
+                        quantize_config = BaseQuantizeConfig(
+                            bits=8,  # quantize model to 4-bit
+                            group_size=group_size,  # it is recommended to set the value to 128
+                            desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
+                        )
+                    # load un-quantized model, by default, the model will always be loaded into CPU memory
+                    temp_kwargs = {k: v for k,v in kwargs.items() if k != "max_memory"}
+                    model = AutoGPTQForCausalLM.from_pretrained(model_path, quantize_config, low_cpu_mem_usage=True, **temp_kwargs)
+                    quant_dataset = datasets.load_dataset("Vtuber-plan/quantdata-10k")
+                    train_quant_dataset = quant_dataset["train"]["text"]
+                    examples = []
+                    for data in train_quant_dataset:
+                        examples.append(tokenizer(data, max_length=32, padding="longest", truncation=True, return_tensors='pt'))
+                    model.quantize(examples, batch_size = 1, cache_examples_on_gpu=False)
+                    temp_model_path = os.path.join(offload_folder, os.path.basename(model_path))
+                    model.save_quantized(temp_model_path, use_safetensors=True)
+                    model = AutoGPTQForCausalLM.from_quantized(temp_model_path, low_cpu_mem_usage=True, **kwargs)
             else:
                 if num_gpus != 1:
                     warnings.warn(

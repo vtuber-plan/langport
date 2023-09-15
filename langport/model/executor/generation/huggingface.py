@@ -588,6 +588,7 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         cpu_offloading: bool,
         deepspeed: bool = False,
         gptq: bool = False,
+        group_size: Optional[int] = None,
         trust_remote_code: bool = False,
         offload_folder: Optional[str] = None,
     ) -> None:
@@ -604,7 +605,7 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         self.model = None
         self.tokenizer = None
         self.adapter, self.model, self.tokenizer = self.load_model(
-            model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading, deepspeed, gptq, trust_remote_code, offload_folder
+            model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading, deepspeed, gptq, group_size, trust_remote_code, offload_folder
         )
         self.model.eval()
 

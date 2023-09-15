@@ -351,11 +351,11 @@ def load_compress_model(model_path, device, compression_config: CompressionConfi
                 model,
                 max_memory=max_memory,
                 no_split_module_classes=no_split_module_classes,
-                dtype=torch_dtype,
+                dtype=torch.int8,
                 low_zero=(device_map == "balanced_low_0"),
             )
         device_map = infer_auto_device_map(
-            model, max_memory=max_memory, no_split_module_classes=no_split_module_classes, dtype=torch_dtype
+            model, max_memory=max_memory, no_split_module_classes=no_split_module_classes, dtype=torch.int8
         )
     else:
         device_map = defaultdict(lambda:device)

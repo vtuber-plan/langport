@@ -63,6 +63,7 @@ if __name__ == "__main__":
         cpu_offloading=args.cpu_offloading,
         deepspeed=args.deepspeed,
         gptq=args.gptq,
+        group_size=args.group_size,
         trust_remote_code=args.trust_remote_code,
         offload_folder=args.offload_folder,
     )
