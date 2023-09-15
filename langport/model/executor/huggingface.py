@@ -109,7 +109,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
             trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
             tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=trust_remote_code)
             model = AutoModelForCausalLM.from_pretrained(
-                model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
+                model_path, low_cpu_mem_usage=True,**from_pretrained_kwargs
             )
 
         return model, tokenizer
@@ -163,6 +163,9 @@ class HuggingfaceExecutor(LocalModelExecutor):
         kwargs["trust_remote_code"] = trust_remote_code
         kwargs["offload_folder"] = offload_folder
 
+        if gptq and quantization is None:
+            kwargs["disable_exllama"] = True
+
         if cpu_offloading:
             # raises an error on incompatible platforms
             from transformers import BitsAndBytesConfig
@@ -177,7 +180,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
             kwargs["load_in_8bit"] = quantization!=None
             # Load model
             model, tokenizer = self._load_hf_model(adapter, model_path, kwargs)
-        elif quantization is not None:
+        elif quantization is not None or gptq:
             if group_size is None:
                 group_size = 128
             if gptq:
@@ -188,6 +191,9 @@ class HuggingfaceExecutor(LocalModelExecutor):
                     model = AutoGPTQForCausalLM.from_quantized(model_path, **kwargs)
                 else:
                     tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, **kwargs)
+                    if tokenizer._pad_token is None:
+                        tokenizer.pad_token = tokenizer.eos_token
+
                     if "4" in quantization:
                         quantize_config = BaseQuantizeConfig(
                             bits=4,  # quantize model to 4-bit
@@ -207,14 +213,14 @@ class HuggingfaceExecutor(LocalModelExecutor):
                             desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
                         )
                     # load un-quantized model, by default, the model will always be loaded into CPU memory
-                    temp_kwargs = {k: v for k,v in kwargs.items() if k != "max_memory"}
+                    temp_kwargs = {k: v for k,v in kwargs.items() if k not in ["max_memory", "device_map"]}
                     model = AutoGPTQForCausalLM.from_pretrained(model_path, quantize_config, low_cpu_mem_usage=True, **temp_kwargs)
                     quant_dataset = datasets.load_dataset("Vtuber-plan/quantdata-10k")
-                    train_quant_dataset = quant_dataset["train"]["text"]
+                    train_quant_dataset = quant_dataset["train"]
                     examples = []
                     for data in train_quant_dataset:
-                        examples.append(tokenizer(data, max_length=32, padding="longest", truncation=True, return_tensors='pt'))
-                    model.quantize(examples, batch_size = 1, cache_examples_on_gpu=False)
+                        examples.append(tokenizer(data["text"], max_length=512, padding="longest", truncation=True, return_tensors='pt'))
+                    model.quantize(examples, batch_size=1, cache_examples_on_gpu=False)
                     temp_model_path = os.path.join(offload_folder, os.path.basename(model_path))
                     model.save_quantized(temp_model_path, use_safetensors=True)
                     model = AutoGPTQForCausalLM.from_quantized(temp_model_path, low_cpu_mem_usage=True, **kwargs)
