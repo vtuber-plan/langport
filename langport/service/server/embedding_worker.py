@@ -50,13 +50,20 @@ if __name__ == "__main__":
     if args.model_name is None:
         args.model_name = os.path.basename(os.path.normpath(args.model_path))
 
+    if args.load_8bit:
+        quantization = "8bit"
+    elif args.load_4bit:
+        quantization = "4bit"
+    else:
+        quantization = None
+
     executor = HuggingfaceEmbeddingExecutor(
         model_name=args.model_name,
         model_path=args.model_path,
         device=args.device,
         num_gpus=args.num_gpus,
         max_gpu_memory=args.max_gpu_memory,
-        load_8bit=args.load_8bit,
+        quantization=quantization,
         cpu_offloading=args.cpu_offloading,
         deepspeed=args.deepspeed,
         trust_remote_code=args.trust_remote_code
