@@ -6,7 +6,7 @@ pydantic==1.10.7
 requests==2.30.0
 shortuuid==1.0.11
 tenacity==8.2.2
-transformers==4.33.1
+transformers==4.34.0
 uvicorn==0.22.0
 torch==2.0.1+cu118
 cachetools==5.3.0

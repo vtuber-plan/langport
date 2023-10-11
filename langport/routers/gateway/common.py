@@ -3,21 +3,33 @@ import json
 from typing import Optional, Union
 import httpx
 import numpy as np
-from pydantic import BaseSettings
+
+BASE_SETTINGS = False
+if not BASE_SETTINGS:
+    try:
+        from pydantic import BaseSettings
+        BASE_SETTINGS = True
+    except ImportError:
+        BASE_SETTINGS = False
+
+if not BASE_SETTINGS:
+    try:
+        from pydantic_settings import BaseSettings
+        BASE_SETTINGS = True
+    except ImportError:
+        BASE_SETTINGS = False
+
+if not BASE_SETTINGS:
+    raise Exception("Cannot import BaseSettings from pydantic or pydantic-settings")
 
 from langport.core.dispatch import DispatchMethod
 from langport.protocol.openai_api_protocol import ErrorResponse
 from langport.protocol.worker_protocol import WorkerAddressRequest, WorkerAddressResponse
 
-import json
-
 from typing import Generator, Optional, Union, Dict, List, Any
 
 from fastapi.responses import StreamingResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, DispatchFunction
-import httpx
-import numpy as np
-from pydantic import BaseSettings
 
 from langport.constants import WORKER_API_TIMEOUT, ErrorCode
 from langport.model.model_adapter import get_conversation_template
