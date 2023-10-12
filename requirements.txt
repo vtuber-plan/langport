@@ -2,7 +2,7 @@ fastapi==0.95.1
 httpx==0.24.0
 numpy==1.24.3
 psutil==5.9.5
-pydantic==1.10.7
+pydantic==1.10.8
 requests==2.30.0
 shortuuid==1.0.11
 tenacity==8.2.2
