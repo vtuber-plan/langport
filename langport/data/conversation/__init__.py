@@ -198,11 +198,10 @@ class ConversationHistory:
             ret = system_prompt + self.settings.sep
 
             for i, (role, message) in enumerate(self.messages):
-                ret += im_start
                 if message:
-                    ret += role + "\n" + message + im_end + self.settings.sep
+                    ret += im_start + role + "\n" + message + im_end + self.settings.sep
                 else:
-                    ret += role + "\n"
+                    ret += im_start + role + "\n"
             return ret
         else:
             raise ValueError(f"Invalid style: {self.settings.sep_style}")
