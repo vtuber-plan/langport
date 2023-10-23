@@ -73,8 +73,8 @@ class ChatCompletionRequest(BaseModel):
     stream: Optional[bool] = False
     presence_penalty: Optional[float] = 0.0
     frequency_penalty: Optional[float] = 0.0
-    functions: Optional[List[FunctionDefinition]]
-    function_call: Optional[Union[Literal["none", "auto"], FunctionEntry]]
+    functions: Optional[List[FunctionDefinition]] = None
+    function_call: Optional[Union[Literal["none", "auto"], FunctionEntry]] = None
     user: Optional[str] = None
 
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "langport"
-version = "0.3.3"
+version = "0.3.7"
 description = "A large language model serving platform."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -13,10 +13,10 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = [
-    "accelerate>=0.22.0", "fastapi", "httpx", "numpy", "pydantic", "requests",
-    "rich>=10.0.0", "sentencepiece",
-    "shortuuid", "tokenizers>=0.12.1", "torch",
-    "transformers>=4.33.1", "uvicorn", "wandb", "tenacity>=8.2.2",
+    "accelerate>=0.22.0", "fastapi", "httpx", "numpy", "pydantic<=1.10.13", "requests",
+    "rich>=10.0.0", "sentencepiece", "datasets>=2.14.5",
+    "shortuuid", "tokenizers>=0.14.1", "torch",
+    "transformers>=4.34.0", "uvicorn", "wandb", "tenacity>=8.2.2",
 ]
 
 [project.optional-dependencies]

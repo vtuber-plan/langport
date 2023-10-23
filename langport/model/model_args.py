@@ -45,6 +45,11 @@ def add_model_args(parser):
         help="If the device_map contains any value \"disk\", the folder where we will offload weights",
     )
     parser.add_argument(
+        "--group-size",
+        type=str, default=None,
+        help="The group size parameter of quantization",
+    )
+    parser.add_argument(
         "--deepspeed", action="store_true", help="Use deepspeed"
     )
     parser.add_argument(
