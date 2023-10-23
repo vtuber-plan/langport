@@ -32,7 +32,7 @@ def add_model_args(parser):
         "--load-4bit", action="store_true", help="Use 4-bit quantization"
     )
     parser.add_argument(
-        "--svd", action="store_true", help="Use SVD"
+        "--gptq", action="store_true", help="Use gptq quantization"
     )
     parser.add_argument(
         "--cpu-offloading",
@@ -40,8 +40,21 @@ def add_model_args(parser):
         help="Only when using 8-bit quantization: Offload excess weights to the CPU that don't fit on the GPU",
     )
     parser.add_argument(
+        "--offload-folder",
+        type=str, default=None,
+        help="If the device_map contains any value \"disk\", the folder where we will offload weights",
+    )
+    parser.add_argument(
+        "--group-size",
+        type=str, default=None,
+        help="The group size parameter of quantization",
+    )
+    parser.add_argument(
         "--deepspeed", action="store_true", help="Use deepspeed"
     )
     parser.add_argument(
         "--trust-remote-code", action="store_true", help="Trust remote code"
+    )
+    parser.add_argument(
+        "--sleep", type=int, default=0, help="Sleep after seconds"
     )

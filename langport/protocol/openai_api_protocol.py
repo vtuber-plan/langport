@@ -44,6 +44,24 @@ class UsageInfo(BaseModel):
     total_tokens: int = 0
     completion_tokens: Optional[int] = 0
 
+class FunctionProperty(BaseModel):
+    type: str
+    description: Optional[str]
+    enum: Optional[List[str]]
+
+class FunctionParameters(BaseModel):
+    type: str
+    properties: Dict[str, FunctionProperty]
+    required: List[str]
+
+class FunctionDefinition(BaseModel):
+    name: str
+    description: Optional[str]
+    parameters: FunctionParameters
+
+class FunctionEntry(BaseModel):
+    name: str
+
 class ChatCompletionRequest(BaseModel):
     model: str
     messages: List[Dict[str, str]]
@@ -55,6 +73,8 @@ class ChatCompletionRequest(BaseModel):
     stream: Optional[bool] = False
     presence_penalty: Optional[float] = 0.0
     frequency_penalty: Optional[float] = 0.0
+    functions: Optional[List[FunctionDefinition]] = None
+    function_call: Optional[Union[Literal["none", "auto"], FunctionEntry]] = None
     user: Optional[str] = None
 
 

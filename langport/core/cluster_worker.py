@@ -127,9 +127,11 @@ class ClusterWorker(ClusterNode):
     def get_num_tasks(self) -> int:
         return self.task_queue.qsize()
 
-    def fetch_tasks(self) -> List[BaseWorkerResult]:
+    def fetch_tasks(self, task_num: Optional[int]=None) -> List[BaseWorkerResult]:
+        if task_num is None:
+            task_num = self.max_batch
         task_batch = []
-        while len(task_batch) < self.max_batch:
+        while len(task_batch) < task_num:
             try:
                 task = self.task_queue.get(block=False, timeout=None)
             except queue.Empty:

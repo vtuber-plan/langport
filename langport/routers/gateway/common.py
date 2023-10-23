@@ -3,21 +3,33 @@ import json
 from typing import Optional, Union
 import httpx
 import numpy as np
-from pydantic import BaseSettings
+
+BASE_SETTINGS = False
+if not BASE_SETTINGS:
+    try:
+        from pydantic import BaseSettings
+        BASE_SETTINGS = True
+    except ImportError:
+        BASE_SETTINGS = False
+
+if not BASE_SETTINGS:
+    try:
+        from pydantic_settings import BaseSettings
+        BASE_SETTINGS = True
+    except ImportError:
+        BASE_SETTINGS = False
+
+if not BASE_SETTINGS:
+    raise Exception("Cannot import BaseSettings from pydantic or pydantic-settings")
 
 from langport.core.dispatch import DispatchMethod
 from langport.protocol.openai_api_protocol import ErrorResponse
 from langport.protocol.worker_protocol import WorkerAddressRequest, WorkerAddressResponse
 
-import json
-
 from typing import Generator, Optional, Union, Dict, List, Any
 
 from fastapi.responses import StreamingResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, DispatchFunction
-import httpx
-import numpy as np
-from pydantic import BaseSettings
 
 from langport.constants import WORKER_API_TIMEOUT, ErrorCode
 from langport.model.model_adapter import get_conversation_template
@@ -119,7 +131,8 @@ async def _list_models(app_settings: AppSettings, feature: Optional[str], client
     models = [json.loads(obj) for obj in response.values]
     # No available worker
     if address_list == []:
-        raise ValueError(f"No available worker for feature {feature}")
+        # raise ValueError(f"No available worker for feature {feature}")
+        return []
 
     return models
 
@@ -179,6 +192,26 @@ def check_requests(request) -> Optional[JSONResponse]:
         return create_error_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.stop} is not valid under any of the given schemas - 'stop'",
+        )
+    if request.presence_penalty is not None and request.presence_penalty < -2.0:
+        return create_error_response(
+            ErrorCode.PARAM_OUT_OF_RANGE,
+            f"{request.presence_penalty} is less than the minimum of -2.0 - 'presence_penalty'",
+        )
+    if request.presence_penalty is not None and request.presence_penalty > 2.0:
+        return create_error_response(
+            ErrorCode.PARAM_OUT_OF_RANGE,
+            f"{request.presence_penalty} is less than the maximum of 2.0 - 'presence_penalty'",
+        )
+    if request.frequency_penalty is not None and request.frequency_penalty < -2.0:
+        return create_error_response(
+            ErrorCode.PARAM_OUT_OF_RANGE,
+            f"{request.frequency_penalty} is less than the minimum of -2.0 - 'frequency_penalty'",
+        )
+    if request.frequency_penalty is not None and request.frequency_penalty > 2.0:
+        return create_error_response(
+            ErrorCode.PARAM_OUT_OF_RANGE,
+            f"{request.frequency_penalty} is less than the maximum of 2.0 - 'frequency_penalty'",
         )
 
     return None

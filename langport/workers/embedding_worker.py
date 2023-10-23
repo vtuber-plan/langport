@@ -50,7 +50,7 @@ class EmbeddingModelWorker(ClusterWorker):
             logger=logger,
         )
         self.executor = executor
-        workers = max(1, 2 * self.limit_model_concurrency // self.max_batch)
+        workers = max(1, self.limit_model_concurrency)
         self.add_timer(
             "embeddings_inference", 
             EMBEDDING_INFERENCE_INTERVAL, 

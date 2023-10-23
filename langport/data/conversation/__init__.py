@@ -15,12 +15,14 @@ class SeparatorStyle(Enum):
     ADD_COLON_TWO = auto()
     ADD_COLON_SPACE_SINGLE = auto()
     NO_COLON_SINGLE = auto()
+    NO_COLON_TWO = auto()
     ADD_NEW_LINE_SINGLE = auto()
     DOLLY = auto()
     RWKV = auto()
     PHOENIX = auto()
     CHATGLM = auto()
     LLAMA = auto()
+    CHATLM = auto()
 
 
 @dataclasses.dataclass
@@ -33,8 +35,9 @@ class ConversationSettings:
     sep_style: SeparatorStyle
     sep: str
     sep2: Optional[str] = None
-    system_sep: Optional[str] = None
     round_sep: Optional[str] = None
+    # The template of the system prompt
+    system_template: str = "{system_message}"
     # Stop criteria (the default one is EOS token)
     stop_str: str = None
     # Stops generation if meeting any token in this list
@@ -44,10 +47,10 @@ class ConversationSettings:
         return ConversationSettings(
             name=self.name,
             roles=self.roles,
+            system_template=self.system_template,
             sep_style=self.sep_style,
             sep=self.sep,
             sep2=self.sep2,
-            system_sep=self.system_sep,
             round_sep=self.round_sep,
             stop_str=self.stop_str,
             stop_token_ids=self.stop_token_ids,
@@ -73,12 +76,9 @@ class ConversationHistory:
             round_sep = self.settings.round_sep
         else:
             round_sep = ""
+        system_prompt = self.settings.system_template.format(system_message=self.system)
         if self.settings.sep_style == SeparatorStyle.ADD_COLON_SINGLE:
-            if self.settings.system_sep is not None:
-                ret = self.system + self.settings.system_sep
-            else:
-                ret = self.system + self.settings.sep
-            
+            ret = system_prompt + self.settings.sep
             for i, (role, message) in enumerate(self.messages):
                 if i % len(self.settings.roles) == 0:
                     ret += round_sep
@@ -89,10 +89,7 @@ class ConversationHistory:
             return ret
         elif self.settings.sep_style == SeparatorStyle.ADD_COLON_TWO:
             seps = [self.settings.sep, self.settings.sep2]
-            if self.settings.system_sep is not None:
-                ret = self.system + self.settings.system_sep
-            else:
-                ret = self.system + seps[0]
+            ret = system_prompt + seps[0]
             
             for i, (role, message) in enumerate(self.messages):
                 if i % len(self.settings.roles) == 0:
@@ -103,10 +100,7 @@ class ConversationHistory:
                     ret += role + ": "
             return ret
         elif self.settings.sep_style == SeparatorStyle.NO_COLON_SINGLE:
-            if self.settings.system_sep is not None:
-                ret = self.system + self.settings.system_sep
-            else:
-                ret = self.system
+            ret = system_prompt + self.settings.sep
             
             for i, (role, message) in enumerate(self.messages):
                 if i % len(self.settings.roles) == 0:
@@ -116,11 +110,17 @@ class ConversationHistory:
                 else:
                     ret += role
             return ret
+        elif self.settings.sep_style == SeparatorStyle.NO_COLON_TWO:
+            seps = [self.settings.sep, self.settings.sep2]
+            ret = system_prompt + seps[0]
+            for i, (role, message) in enumerate(self.messages):
+                if message:
+                    ret += role + message + seps[i % 2]
+                else:
+                    ret += role
+            return ret
         elif self.settings.sep_style == SeparatorStyle.ADD_NEW_LINE_SINGLE:
-            if self.settings.system_sep is not None:
-                ret = self.system + self.settings.system_sep
-            else:
-                ret = self.system + self.settings.sep
+            ret = "" if system_prompt == "" else system_prompt + self.settings.sep
 
             for i, (role, message) in enumerate(self.messages):
                 if i % len(self.settings.roles) == 0:
@@ -133,7 +133,7 @@ class ConversationHistory:
             return ret
         elif self.settings.sep_style == SeparatorStyle.DOLLY:
             seps = [self.settings.sep, self.settings.sep2]
-            ret = self.system
+            ret = system_prompt
             for i, (role, message) in enumerate(self.messages):
                 if message:
                     ret += role + ":\n" + message + seps[i % 2]
@@ -143,7 +143,7 @@ class ConversationHistory:
                     ret += role + ":\n"
             return ret
         elif self.settings.sep_style == SeparatorStyle.RWKV:
-            ret = self.system
+            ret = system_prompt + self.settings.sep
             for i, (role, message) in enumerate(self.messages):
                 if message:
                     ret += (
@@ -156,7 +156,7 @@ class ConversationHistory:
                     ret += role + ":"
             return ret
         elif self.settings.sep_style == SeparatorStyle.PHOENIX:
-            ret = self.system
+            ret = system_prompt
             for role, message in self.messages:
                 if message:
                     ret += role + ": " + "<s>" + message + "</s>"
@@ -164,7 +164,10 @@ class ConversationHistory:
                     ret += role + ": " + "<s>"
             return ret
         elif self.settings.sep_style == SeparatorStyle.CHATGLM:
-            ret = self.system
+            if system_prompt:
+                ret = system_prompt + self.settings.sep
+            else:
+                ret = ""
             for i, (role, message) in enumerate(self.messages):
                 if message:
                     if i % 2 == 0:
@@ -180,14 +183,25 @@ class ConversationHistory:
             system_a = ""
             ret = f"{B_INST} {system_q} {E_INST} {system_a}"
             for i, (role, message) in enumerate(self.messages):
-                if i % 2 == 0:
-                    inst = B_INST
+                if role == self.settings.roles[0]:
+                    if not(i != 0 and self.messages[i - 1][0] == self.settings.roles[0]):
+                        inst = B_INST
                 else:
                     inst = E_INST
                 if message:
                     ret += inst + " " + message.strip() + " "
                 else:
                     ret += inst + " "
+            return ret
+        elif self.settings.sep_style == SeparatorStyle.CHATLM:
+            im_start, im_end = "<|im_start|>", "<|im_end|>"
+            ret = system_prompt + self.settings.sep
+
+            for i, (role, message) in enumerate(self.messages):
+                if message:
+                    ret += im_start + role + "\n" + message + im_end + self.settings.sep
+                else:
+                    ret += im_start + role + "\n"
             return ret
         else:
             raise ValueError(f"Invalid style: {self.settings.sep_style}")

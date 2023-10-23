@@ -20,8 +20,8 @@ if __name__ == "__main__":
 
     add_model_args(parser)
     parser.add_argument("--model-name", type=str, help="Optional display name")
-    parser.add_argument("--limit-model-concurrency", type=int, default=8)
-    parser.add_argument("--batch", type=int, default=4)
+    parser.add_argument("--limit-model-concurrency", type=int, default=4)
+    parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--stream-interval", type=int, default=2)
     args = parser.parse_args()
 
@@ -62,7 +62,10 @@ if __name__ == "__main__":
         quantization=quantization,
         cpu_offloading=args.cpu_offloading,
         deepspeed=args.deepspeed,
-        trust_remote_code=args.trust_remote_code
+        gptq=args.gptq,
+        group_size=args.group_size,
+        trust_remote_code=args.trust_remote_code,
+        offload_folder=args.offload_folder,
     )
     
     app.node = GenerationModelWorker(

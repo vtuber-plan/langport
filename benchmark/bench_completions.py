@@ -1,4 +1,5 @@
 import argparse
+import json
 import random
 import time
 import traceback
@@ -74,6 +75,9 @@ def main(args):
     results = []
     for task in tqdm.tqdm(tasks):
       results.append(task.result())
+    
+  with open("benchmark_completion.txt", "w", encoding="utf-8") as f:
+    f.write(json.dumps(results, ensure_ascii=False))
 
   n_tokens = sum([ret[2] for ret in results])
   n_queries = sum([1 for ret in results if ret[2] != 0])

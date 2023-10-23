@@ -44,6 +44,7 @@ We create 32 threads to submit chat tasks to the server, and the following figur
 ![benchmark_chat](assets/benchmark_chat.jpg)
 
 ## News
+- [2023/08/04] Dynamic batch inference.
 - [2023/07/16] Support int4 quantization.
 - [2023/07/13] Support generation logprobs parameter.
 - [2023/06/18] Add ggml (llama.cpp gpt.cpp starcoder.cpp etc.) worker support.
@@ -135,6 +136,12 @@ Run text generation with ggml worker:
 ```bash
 python -m langport.service.server.ggml_generation_worker --port 21001 --model-path <your model path> --gpu-layers <num layer to gpu (resize this for your VRAM)>
 ```
+
+Run OpenAI forward server: 
+```bash
+python -m langport.service.server.chatgpt_generation_worker --port 21001 --api-url <url> --api-key <key>
+```
+
 
 ## License
 

@@ -3,7 +3,7 @@ import asyncio
 import asyncio
 import json
 
-from typing import Generator, Optional, Union, Dict, List, Any
+from typing import Coroutine, Generator, Optional, Union, Dict, List, Any
 
 from fastapi.responses import StreamingResponse
 import httpx
@@ -41,6 +41,20 @@ from langport.protocol.worker_protocol import (
 from langport.core.dispatch import DispatchMethod
 from langport.routers.gateway.common import LANGPORT_HEADER, AppSettings, _get_worker_address, _list_models, check_model, check_requests, create_error_response
 
+def clean_system_prompts(messages: List[Dict[str, str]]):
+    system_prompt = ""
+    result = []
+    for i, message in enumerate(messages):
+        if i != 0 and message["role"] == "system":
+            system_prompt += message["content"] + "\n"
+            continue
+        result.append(message)
+    system_prompt = system_prompt.rstrip("\n")
+    if len(messages) > 0 and messages[0]["role"] == "system":
+        messages[0]["content"] += "\n" + system_prompt
+    else:
+        messages.insert(0, {"role": "system", "content": system_prompt})
+    return result
 
 def get_gen_params(
     model_name: str,
@@ -53,6 +67,8 @@ def get_gen_params(
     stream: Optional[bool],
     stop: Optional[Union[str, List[str]]],
     logprobs: Optional[int]=None,
+    presence_penalty: Optional[float]=0.0,
+    frequency_penalty: Optional[float]=0.0,
 ) -> Dict[str, Any]:
     # is_chatglm = "chatglm" in model_name.lower()
     conv = get_conversation_template(model_name)
@@ -60,6 +76,7 @@ def get_gen_params(
     if isinstance(messages, str):
         prompt = messages
     else:
+        messages = clean_system_prompts(messages)
         for message in messages:
             msg_role = message["role"]
             if msg_role == "system":
@@ -101,13 +118,21 @@ def get_gen_params(
             stop_words.append(conv.settings.stop_str)
         gen_params.update({"stop": stop_words})
     else:
-        gen_params.update({"stop": conv.settings.stop_str})
+        gen_params.update({"stop": stop + [conv.settings.stop_str]})
+    
+    if presence_penalty is not None:
+        gen_params["presence_penalty"] = presence_penalty
+    if frequency_penalty is not None:
+        gen_params["frequency_penalty"] = frequency_penalty
 
     return gen_params
 
 async def api_models(app_settings: AppSettings):
     async with httpx.AsyncClient() as client:
-        models = await _list_models(app_settings, None, client)
+        generation_models = await _list_models(app_settings, "generation", client)
+    async with httpx.AsyncClient() as client:
+        embedding_models = await _list_models(app_settings, "embedding", client)
+    models = generation_models + embedding_models
     models.sort()
     # TODO: return real model permission details
     model_cards = []
@@ -377,6 +402,8 @@ async def api_completions(app_settings: AppSettings, request: CompletionRequest)
         stream=request.stream,
         stop=request.stop,
         logprobs=request.logprobs,
+        presence_penalty=request.presence_penalty,
+        frequency_penalty=request.frequency_penalty,
     )
 
     if request.stream:
@@ -403,6 +430,8 @@ async def api_chat_completions(app_settings: AppSettings, request: ChatCompletio
         echo=False,
         stream=request.stream,
         stop=request.stop,
+        presence_penalty=request.presence_penalty,
+        frequency_penalty=request.frequency_penalty,
     )
     if request.stream:
         return await chat_completions_stream(app_settings, payload, request)
