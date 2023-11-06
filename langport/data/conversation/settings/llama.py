@@ -7,6 +7,7 @@ from langport.data.conversation import (
 # Llama default template
 llama = ConversationSettings(
     name="llama",
+    system_template="[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n",
     roles=("user", "assistant"),
     sep_style=SeparatorStyle.LLAMA,
     sep="",
