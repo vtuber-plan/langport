@@ -7,7 +7,7 @@ from langport.data.conversation import (
 # StarChat default template
 starchat = ConversationSettings(
     name="starchat",
-    system_template="<system>\n{system_message}",
+    system_template="<|system|>\n{system_message}",
     roles=("<|user|>", "<|assistant|>"),
     sep_style=SeparatorStyle.ADD_NEW_LINE_SINGLE,
     sep="<|end|>\n",

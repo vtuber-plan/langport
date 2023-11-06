@@ -107,16 +107,12 @@ def get_gen_params(
         "stop_token_ids": conv.settings.stop_token_ids,
     }
 
-    stop_words = []
-    if isinstance(stop, str):
-        stop_words.append(stop)
-    elif isinstance(stop, list):
-        stop_words.extend(stop)
-    
-    if len(stop_words) > 0:
-        if conv.settings.stop_str is not None:
-            stop_words.append(conv.settings.stop_str)
-        gen_params.update({"stop": stop_words})
+    if stop is None:
+        gen_params.update(
+            {"stop": conv.settings.stop_str}
+        )
+    elif isinstance(stop, str):
+        gen_params.update({"stop": [stop, conv.settings.stop_str]})
     else:
         gen_params.update({"stop": stop + [conv.settings.stop_str]})
     

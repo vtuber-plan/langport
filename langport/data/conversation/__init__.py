@@ -178,20 +178,30 @@ class ConversationHistory:
             return ret
         elif self.settings.sep_style == SeparatorStyle.LLAMA:
             B_INST, E_INST = "[INST]", "[/INST]"
-            B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-            system_q = B_SYS + self.system + E_SYS
-            system_a = ""
-            ret = f"{B_INST} {system_q} {E_INST} {system_a}"
+            if system_prompt:
+                ret = system_prompt + self.settings.sep
+            else:
+                ret = ""
+            
+            if self.messages[0][0] == "system":
+                self.messages.pop(0)
             for i, (role, message) in enumerate(self.messages):
-                if role == self.settings.roles[0]:
-                    if not(i != 0 and self.messages[i - 1][0] == self.settings.roles[0]):
-                        inst = B_INST
+                if i % 2 == 0:
+                    inst = B_INST + " "
                 else:
-                    inst = E_INST
+                    inst = E_INST + " "
+                if i == 0:
+                    inst = ""
                 if message:
-                    ret += inst + " " + message.strip() + " "
+                    if i % 2 == 0:
+                        ret += inst + message.strip() + " "
+                    else:
+                        ret += inst + message.strip() + " "
+                    if i == len(self.messages) - 1:
+                        ret += E_INST
                 else:
-                    ret += inst + " "
+                    ret += E_INST
+
             return ret
         elif self.settings.sep_style == SeparatorStyle.CHATLM:
             im_start, im_end = "<|im_start|>", "<|im_end|>"
