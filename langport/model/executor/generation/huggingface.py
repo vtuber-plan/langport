@@ -1,3 +1,4 @@
+import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 from langport.model.executor.generation import BaseStreamer
 
@@ -591,6 +592,7 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         group_size: Optional[int] = None,
         trust_remote_code: bool = False,
         offload_folder: Optional[str] = None,
+        sleep_time: Optional[int] = 30,
     ) -> None:
         super(HuggingfaceGenerationExecutor, self).__init__(
             model_name=model_name,
@@ -601,6 +603,15 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
             quantization=quantization,
             cpu_offloading=cpu_offloading
         )
+        self.last_call_time = time.time()
+
+        self.deepspeed = deepspeed
+        self.gptq = gptq
+        self.group_size = group_size
+        self.trust_remote_code = trust_remote_code
+        self.offload_folder = offload_folder
+        self.sleep_time = sleep_time
+
         self.adapter = None
         self.model = None
         self.tokenizer = None
@@ -619,6 +630,35 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
             self._context_len = 2048
         
         self.current_batch = 2
+    
+    def _record_call_time(self):
+        self.last_call_time = time.time()
+    
+    def sleep(self):
+        self.model = None
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        self.sleeping = True
+
+    def wakeup(self):
+        if self.model is not None:
+            return
+        self.adapter, self.model, self.tokenizer = self.load_model(
+            self.model_path,
+            self.device,
+            self.num_gpus,
+            self.max_gpu_memory,
+            self.quantization,
+            self.cpu_offloading,
+            self.deepspeed,
+            self.gptq,
+            self.group_size,
+            self.trust_remote_code,
+            self.offload_folder
+        )
+        self.model.eval()
+        self.sleeping = False
 
     @property
     def context_length(self) -> int:
@@ -629,6 +669,10 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
         return input_ids
     
     def inference(self, worker: "GenerationModelWorker"):
+        call_interval = time.time() - self.last_call_time
+        if not self.sleeping and self.sleep_time > 0 and call_interval > self.sleep_time:
+            self.sleep()
+
         if not worker.online:
             return
 
@@ -636,6 +680,10 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
 
         if len(tasks) == 0:
             return
+        
+        self._record_call_time()
+        if self.sleeping:
+            self.wakeup()
         
         # batch inference
         tasks = sorted(tasks, key=lambda x:len(x.prompt), reverse=True)

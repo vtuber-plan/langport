@@ -35,6 +35,14 @@ class LocalModelExecutor(BaseModelExecutor):
         self.max_gpu_memory = max_gpu_memory
         self.quantization = quantization
         self.cpu_offloading = cpu_offloading
+
+        self.sleeping = False
+    
+    def sleep(self):
+        pass
+
+    def wakeup(self):
+        pass
         
     @property
     def context_length(self) -> int:
