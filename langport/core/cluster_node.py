@@ -216,7 +216,8 @@ class ClusterNode(BaseNode):
             f"Neighborhoods: {[i for i, v in self.neighborhoods.items()]}."
         )
 
-        for node_id, node_info in self.neighborhoods.items():
+        neighborhoods = {k: v for k, v in self.neighborhoods.items()}
+        for node_id, node_info in neighborhoods.items():
             if node_id == self.node_id:
                 continue
             await self.send_heartbeat(node_info.node_addr)
