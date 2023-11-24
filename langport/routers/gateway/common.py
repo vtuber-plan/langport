@@ -148,9 +148,10 @@ async def check_model(app_settings: AppSettings, request, feature: str, model_na
             )
             return ret
         if len(models) == 0 or model_name not in models:
+            models_unique = list(set(models))
             ret = create_error_response(
                 ErrorCode.INVALID_MODEL,
-                f"Only {'&&'.join(models)} allowed now, your model {model_name}",
+                f"Only {'&&'.join(models_unique)} allowed now, your model {model_name}",
             )
     return ret
 

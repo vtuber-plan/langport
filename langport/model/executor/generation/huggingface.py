@@ -55,7 +55,6 @@ def prepare_logits_processor(
         processor_list.append(TopKLogitsWarper(top_k))
     return processor_list
 
-
 class BatchingTask:
     def __init__(self, tasks: List[GenerationTask], tokenizer: PreTrainedTokenizer, device: str, is_encoder_decoder: bool) -> None:
         self.batch_size = len(tasks)
@@ -298,7 +297,7 @@ class GenerationModel:
                         tmp_output_ids = None
                     last_token_logits = logits_processor(tmp_output_ids, each_logits)[0]
                 else:
-                    last_token_logits = each_logits
+                    last_token_logits = each_logits[0]
 
                 if self.model.device.type == "mps":
                     # Switch to CPU by avoiding some bugs in mps backend.
@@ -308,7 +307,8 @@ class GenerationModel:
                     token = int(torch.argmax(last_token_logits))
                 else:
                     probs = torch.softmax(last_token_logits, dim=-1)
-                    token = int(torch.multinomial(probs, num_samples=2, replacement=True)[0].item())
+                    sampled_tensor = torch.multinomial(probs, num_samples=2, replacement=False)
+                    token = int(sampled_tensor[0].item())
                 
                 if task.logprobs is not None:
                     token_probs[task_i] = each_logits[0, token].item()

@@ -84,7 +84,7 @@ class GenerationTask(BaseWorkerTask):
     temperature: Optional[float] = 0.7
     repetition_penalty: Optional[float] = 0.0
     top_p: Optional[float] = 1.0
-    top_k: Optional[int] = 1
+    top_k: Optional[int] = 0
     max_tokens: Optional[int] = None
     stop: Optional[Union[List[str], str]] = None
     echo: Optional[bool] = False
