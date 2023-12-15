@@ -111,7 +111,8 @@ class HuggingfaceExecutor(LocalModelExecutor):
             ) # , offload_folder="offload"
         else:
             # GPTQ quanted mode work around
-            config = AutoConfig.from_pretrained(model_path)
+            trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
+            config = AutoConfig.from_pretrained(model_path, trust_remote_code=trust_remote_code)
             if hasattr(config, "quantization_config"):
                 quantization_method_from_config = config.quantization_config.get(
                     "quant_method", QuantizationMethod.BITS_AND_BYTES
@@ -173,10 +174,19 @@ class HuggingfaceExecutor(LocalModelExecutor):
                         "device_map"
                     ] = "sequential"  # This is important for not the same VRAM sizes
                     available_gpu_memory = get_gpu_memory(num_gpus)
-                    kwargs["max_memory"] = {
-                        i: str(int(available_gpu_memory[i] * 0.65)) + "GiB"
-                        for i in range(num_gpus)
-                    }
+                    if len(available_gpu_memory) == 0:
+                        kwargs[
+                            "device_map"
+                        ] = "auto"
+                    elif all([mem == available_gpu_memory[0] for mem in available_gpu_memory]):
+                        kwargs[
+                            "device_map"
+                        ] = "balanced"
+                    else:
+                        kwargs["max_memory"] = {
+                            i: str(int(available_gpu_memory[i] * 0.55)) + "GiB"
+                            for i in range(num_gpus)
+                        }
                 else:
                     kwargs["max_memory"] = {i: max_gpu_memory for i in range(num_gpus)}
         elif device == "mps":

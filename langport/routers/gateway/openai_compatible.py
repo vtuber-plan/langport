@@ -73,8 +73,8 @@ def get_gen_params(
     if isinstance(messages, str):
         prompt = messages
     else:
-        messages = clean_system_prompts(messages)
-        for message in messages:
+        clean_messages = clean_system_prompts(messages)
+        for message in clean_messages:
             msg_role = message["role"]
             if msg_role == "system":
                 conv.system = message["content"]
