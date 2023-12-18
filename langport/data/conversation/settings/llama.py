@@ -11,5 +11,5 @@ llama = ConversationSettings(
     roles=("user", "assistant"),
     sep_style=SeparatorStyle.LLAMA,
     sep="",
-    stop_str=["[/INST]", "[INST]"]
+    stop_str="[INST]"
 )
