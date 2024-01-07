@@ -1,4 +1,5 @@
 import time
+import traceback
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 from langport.model.executor.generation import BaseStreamer
 
@@ -694,15 +695,19 @@ class HuggingfaceGenerationExecutor(HuggingfaceExecutor):
                 device = "cuda:0"
             else:
                 device = self.device
-            free_mem, total_mem = torch.cuda.mem_get_info(device)
-            if free_mem < total_mem * 0.3:
-                new_batch = self.current_batch * 2
-            elif free_mem < total_mem * 0.8:
-                new_batch = self.current_batch + 1
-            elif free_mem > total_mem * 0.95:
-                new_batch = self.current_batch - 1
-            if len(tasks) == self.current_batch:
-                self.current_batch = new_batch
+            
+            try:
+                free_mem, total_mem = torch.cuda.mem_get_info(device)
+                if free_mem < total_mem * 0.3:
+                    new_batch = self.current_batch * 2
+                elif free_mem < total_mem * 0.8:
+                    new_batch = self.current_batch + 1
+                elif free_mem > total_mem * 0.95:
+                    new_batch = self.current_batch - 1
+                if len(tasks) == self.current_batch:
+                    self.current_batch = new_batch
+            except RuntimeError as e:
+                traceback.print_exc()
         else:
             self.current_batch = worker.max_batch
 
