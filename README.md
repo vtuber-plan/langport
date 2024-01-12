@@ -34,14 +34,7 @@ The core features include:
 * LLaMa, LLaMa2, GLM, Bloom, OPT, GPT2, GPT Neo, GPT Big Code and so on.
 
 ## Tested Models
-* NingYu, LLaMa, LLaMa2-chat, Vicuna, ChatGLM, ChatGLM2, Falcon, Starcoder, WizardLM, InternLM, OpenBuddy, FireFly, CodeGen, Phoenix, RWKV, StableLM and so on.
-
-
-## Benchmark
-We use single RTX3090 to run a finetuned 7B LLaMA model (OpenBuddy V0.9) under the bf16 setting.
-We create 32 threads to submit chat tasks to the server, and the following figure shows the Queries Per Second (QPS) and Tokens Per Second (TPS) of FastChat and LangPort with different max model concurrency settings.
-
-![benchmark_chat](assets/benchmark_chat.jpg)
+* NingYu, LLaMa, LLaMa2, Vicuna, ChatGLM, ChatGLM2, Falcon, Starcoder, WizardLM, InternLM, OpenBuddy, FireFly, CodeGen, Phoenix, RWKV, StableLM and so on.
 
 ## News
 - [2023/08/04] Dynamic batch inference.
@@ -77,7 +70,7 @@ If you need ggml generation worker, use this command:
 pip install langport[ggml]
 ```
 
-If you wanna use GPU:
+If you want to use GPU:
 ```bash
 CT_CUBLAS=1 pip install langport[ggml]
 ```
@@ -95,6 +88,20 @@ cd langport
 pip install --upgrade pip
 pip install -e .
 ```
+
+## Quick start
+It is simple to start a local chat API service:
+
+First, start a worker process in the terminal:
+``` bash
+python -m langport.service.server.generation_worker --port 21001 --model-path <your model path>
+```
+
+Then, start a API service in another terminal:
+``` bash
+python -m langport.service.gateway.openai_api
+```
+Now, you can use the inference API by openai protocol.
 
 ## Start the server
 
