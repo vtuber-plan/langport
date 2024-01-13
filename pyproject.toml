@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "langport"
-version = "0.3.8"
+version = "0.3.9"
 description = "A large language model serving platform."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -14,7 +14,7 @@ classifiers = [
 ]
 dependencies = [
     "accelerate>=0.22.0", "fastapi", "httpx", "numpy", "pydantic<=1.10.13", "requests",
-    "rich>=10.0.0", "sentencepiece", "datasets>=2.14.5",
+    "rich>=10.0.0", "sentencepiece", "datasets>=2.14.5", "cachetools", "asyncache",
     "shortuuid", "tokenizers>=0.14.1", "torch",
     "transformers>=4.34.0", "uvicorn", "wandb", "tenacity>=8.2.2",
 ]

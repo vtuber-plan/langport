@@ -8,11 +8,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 def start_session(i: int, url: str, model: str) -> str:
   try:
-    openai.api_key = "EMPTY" # Not support yet
-    openai.api_base = url
+    client = openai.OpenAI(
+      base_url = url,
+      api_key="",
+    )
 
     # create a chat completion
-    response = openai.Embedding.create(
+    response = client.embeddings.create(
       model=model,
       input="Hello! What is your name?",
     )

@@ -71,16 +71,17 @@ async def models():
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
+    logger.info(request.json())
     request.model = redirect_model_name(request.model)
     response = await api_chat_completions(app.app_settings, request)
-    logger.info(request.json())
+    
     return response
 
 @app.post("/v1/completions")
 async def completions(request: CompletionRequest):
+    logger.info(request.json())
     request.model = redirect_model_name(request.model)
     response = await api_completions(app.app_settings, request)
-    logger.info(request.json())
     return response
 
 

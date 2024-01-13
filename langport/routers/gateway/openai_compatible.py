@@ -45,15 +45,13 @@ def clean_system_prompts(messages: List[Dict[str, str]]):
     system_prompt = ""
     result = []
     for i, message in enumerate(messages):
-        if i != 0 and message["role"] == "system":
-            system_prompt += message["content"] + "\n"
+        if len(system_prompt) == 0 and message["role"] == "system":
+            system_prompt = message["content"]
             continue
-        result.append(message)
-    system_prompt = system_prompt.rstrip("\n")
-    if len(messages) > 0 and messages[0]["role"] == "system":
-        messages[0]["content"] += "\n" + system_prompt
-    else:
-        messages.insert(0, {"role": "system", "content": system_prompt})
+        if message["role"] in ["user", "assistant"]:
+            result.append(message)
+    # system_prompt = system_prompt.rstrip("\n")
+    result.insert(0, {"role": "system", "content": system_prompt})
     return result
 
 def get_gen_params(
@@ -72,12 +70,11 @@ def get_gen_params(
 ) -> Dict[str, Any]:
     # is_chatglm = "chatglm" in model_name.lower()
     conv = get_conversation_template(model_name)
-
     if isinstance(messages, str):
         prompt = messages
     else:
-        messages = clean_system_prompts(messages)
-        for message in messages:
+        clean_messages = clean_system_prompts(messages)
+        for message in clean_messages:
             msg_role = message["role"]
             if msg_role == "system":
                 conv.system = message["content"]

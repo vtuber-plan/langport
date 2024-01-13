@@ -11,12 +11,15 @@ from concurrent.futures import ThreadPoolExecutor
 
 def start_session(i: int, url: str, model: str, dataset, stream: bool=False, max_tokens: int=2048) -> str:
   try:
-    openai.api_key = "EMPTY" # Not support yet
-    openai.api_base = url
+    client = openai.OpenAI(
+      base_url = url,
+      api_key="",
+    )
+
 
     prompt = dataset[i]
     # create a chat completion
-    response = openai.Completion.create(
+    response = client.completions.create(
       model=model,
       prompt=prompt,
       stream=stream,

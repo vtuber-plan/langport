@@ -22,6 +22,7 @@ if __name__ == "__main__":
     parser.add_argument("--limit-model-concurrency", type=int, default=8)
     parser.add_argument("--batch", type=int, default=4)
     parser.add_argument("--stream-interval", type=int, default=2)
+    parser.add_argument("--sleep-time", type=int, default=-1, help="Offload model after n seconds")
     parser.add_argument(
         "--dispatch-method",
         type=str,
@@ -66,7 +67,11 @@ if __name__ == "__main__":
         quantization=quantization,
         cpu_offloading=args.cpu_offloading,
         deepspeed=args.deepspeed,
-        trust_remote_code=args.trust_remote_code
+        gptq=args.gptq,
+        group_size=args.group_size,
+        trust_remote_code=args.trust_remote_code,
+        offload_folder=args.offload_folder,
+        sleep_time=args.sleep_time
     )
 
     app.node = EmbeddingModelWorker(

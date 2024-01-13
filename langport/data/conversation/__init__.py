@@ -85,7 +85,7 @@ class ConversationHistory:
                 if message:
                     ret += role + ": " + message + self.settings.sep
                 else:
-                    ret += role + ": "
+                    ret += role + ":"
             return ret
         elif self.settings.sep_style == SeparatorStyle.ADD_COLON_TWO:
             seps = [self.settings.sep, self.settings.sep2]
@@ -97,7 +97,7 @@ class ConversationHistory:
                 if message:
                     ret += role + ": " + message + seps[i % 2]
                 else:
-                    ret += role + ": "
+                    ret += role + ":"
             return ret
         elif self.settings.sep_style == SeparatorStyle.NO_COLON_SINGLE:
             ret = system_prompt + self.settings.sep

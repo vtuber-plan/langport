@@ -4,12 +4,12 @@ from langport.data.conversation import (
 )
 
 """
-https://huggingface.co/baichuan-inc/Baichuan-13B-Chat/blob/main/modeling_baichuan.py#L555
+https://huggingface.co/baichuan-inc/Baichuan2-13B-Chat/blob/main/modeling_baichuan.py#L555
 """
 # Baichuan default template
 baichuan = ConversationSettings(
-    name="baichuan",
-    roles=("<reserved_102>", "<reserved_103>"),
+    name="baichuan2",
+    roles=("<reserved_106>", "<reserved_107>"),
     sep_style=SeparatorStyle.NO_COLON_SINGLE,
     sep="",
     stop_token_ids=[2, 195],
