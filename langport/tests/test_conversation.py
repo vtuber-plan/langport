@@ -2,14 +2,14 @@
 from typing import List
 import unittest
 
-from langport.data.conversation.conversation_settings import ConversationHistory
-from langport.data.conversation.settings.baichuan import baichuan
-from langport.data.conversation.settings.chatglm import chatglm
-from langport.data.conversation.settings.chatgpt import chatgpt
-from langport.data.conversation.settings.llama import llama
-from langport.data.conversation.settings.openbuddy import openbuddy
-from langport.data.conversation.settings.qwen import qwen
-from langport.data.conversation.settings.starchat import starchat
+from chatproto.conversation.history import ConversationHistory
+from chatproto.conversation.models.baichuan import baichuan
+from chatproto.conversation.models.chatglm import chatglm
+from chatproto.conversation.models.chatgpt import chatgpt
+from chatproto.conversation.models.llama import llama
+from chatproto.conversation.models.openbuddy import openbuddy
+from chatproto.conversation.models.qwen import qwen
+from chatproto.conversation.models.starchat import starchat
 
 class TestLlamaMethods(unittest.TestCase):
     B_INST, E_INST = "[INST]", "[/INST]"

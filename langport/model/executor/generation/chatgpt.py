@@ -1,6 +1,6 @@
 
 from typing import List, Optional
-from langport.data.conversation.conversation_settings import get_conv_settings
+from chatproto.registry import get_conv_settings
 from langport.model.executor.base import RemoteModelExecutor
 from langport.model.executor.generation import GenerationExecutor
 import openai

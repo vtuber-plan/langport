@@ -37,6 +37,7 @@ The core features include:
 * NingYu, LLaMa, LLaMa2, Vicuna, ChatGLM, ChatGLM2, Falcon, Starcoder, WizardLM, InternLM, OpenBuddy, FireFly, CodeGen, Phoenix, RWKV, StableLM and so on.
 
 ## News
+- [2024/01/13] Introduce the `ChatProto`.
 - [2023/08/04] Dynamic batch inference.
 - [2023/07/16] Support int4 quantization.
 - [2023/07/13] Support generation logprobs parameter.
