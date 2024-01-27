@@ -1,0 +1,30 @@
+name: LangPort GitHub Actions for Development
+run-name: LangPort GitHub Actions for Development
+on:
+  push:
+    branches: [ "development" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["pypy3.9", "pypy3.10", "3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install LangPort
+        run: |
+          cd ${{ github.workspace }}
+          pip install --upgrade pip
+          pip install -e .
+
+      - name: Test LangPort
+        run: |
+          cd ${{ github.workspace }}
+          python -m unittest discover langport/tests
