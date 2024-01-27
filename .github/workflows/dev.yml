@@ -22,7 +22,7 @@ jobs:
         run: |
           cd ${{ github.workspace }}
           pip install --upgrade pip
-          pip install torch==2.1.2 -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install -e .
 
       - name: Test LangPort
