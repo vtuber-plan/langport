@@ -13,7 +13,7 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = [
-    "accelerate>=0.22.0", "fastapi", "httpx", "numpy", "pydantic<=1.10.13", "requests",
+    "fastapi", "httpx", "numpy", "pydantic<=1.10.13", "requests",
     "rich>=10.0.0", "sentencepiece", "datasets>=2.14.5", "cachetools", "asyncache",
     "shortuuid", "tokenizers>=0.14.1", "chatproto",
     "transformers>=4.34.0", "uvicorn", "wandb", "tenacity>=8.2.2",
