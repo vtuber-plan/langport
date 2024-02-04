@@ -115,10 +115,10 @@ class ChatCompletionStreamResponse(BaseModel):
     model: str
     choices: List[ChatCompletionResponseStreamChoice]
 
-
+# TODO: Support List[int] and List[List[int]]
 class EmbeddingsRequest(BaseModel):
     model: str
-    input: str
+    input: Union[str, List[str]]
     user: Optional[str] = None
 
 class EmbeddingsData(BaseModel):

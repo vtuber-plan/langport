@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import torch
 from langport.model.executor.huggingface import HuggingfaceExecutor
-from langport.protocol.worker_protocol import BaseWorkerResult, EmbeddingWorkerResult, UsageInfo
+from langport.protocol.worker_protocol import BaseWorkerResult, EmbeddingWorkerResult, EmbeddingsObject, UsageInfo
 from langport.workers.embedding_worker import EmbeddingModelWorker
 
 
@@ -118,7 +118,19 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
             self.wakeup()
 
         # print(batch_size)
-        prompts = [task.input for task in tasks]
+        prompts = []
+        prompts_index = []
+        for task_i, task in enumerate(tasks):
+            task_input = task.input
+            if isinstance(task_input, str):
+                prompts.append(task_input)
+                prompts_index.append(task_i)
+            elif isinstance(task_input, list):
+                prompts.extend(task_input)
+                prompts_index.extend([task_i] * len(task_input))
+            else:
+                raise Exception("Invalid prompt type...")
+            
         try:
             tokenizer = self.tokenizer
             model = self.model
@@ -133,7 +145,7 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
             input_ids = encoded_prompts.input_ids
             if model.config.is_encoder_decoder:
                 decoder_input_ids = torch.full(
-                    (batch_size, 1),
+                    (len(prompts), 1),
                     model.generation_config.decoder_start_token_id,
                     dtype=torch.long,
                     device=self.device,
@@ -151,14 +163,19 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
                 data = model(**encoded_prompts)
             # embeddings = torch.mean(data, dim=1)
             embeddings = self._mean_pooling(data, encoded_prompts['attention_mask'])
-            for i in range(batch_size):
-                token_num = len(tokenizer(prompts[i]).input_ids)
+            for task_i in range(len(tasks)):
+                token_num = 0
+                embedding_list = []
+                for prompt_i in range(len(prompts)):
+                    if prompts_index[prompt_i] == task_i:
+                        token_num += len(tokenizer(prompts[i]).input_ids)
+                        embedding_list.append(EmbeddingsObject(index=task_i, embedding=embeddings[prompt_i].tolist()))
                 worker.push_task_result(
                     tasks[i].task_id,
                     EmbeddingWorkerResult(
                         task_id=tasks[i].task_id,
                         type="data",
-                        embedding=embeddings[i].tolist(),
+                        embedding=embedding_list,
                         usage=UsageInfo(prompt_tokens=token_num, total_tokens=token_num),
                     )
                 )

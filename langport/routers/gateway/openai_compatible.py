@@ -445,7 +445,7 @@ async def api_embeddings(app_settings: AppSettings, request: EmbeddingsRequest):
     if response.type == "error":
         return create_error_response(ErrorCode.INTERNAL_ERROR, response.message)
     return EmbeddingsResponse(
-        data=[EmbeddingsData(embedding=response.embedding, index=0)],
+        data=[EmbeddingsData(embedding=each.embedding, index=each.index) for each in response.embeddings],
         model=request.model,
         usage=UsageInfo(
             prompt_tokens=response.usage.prompt_tokens,

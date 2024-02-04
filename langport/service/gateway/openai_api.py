@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, DispatchFunction
 from starlette.types import ASGIApp
+from starlette.requests import Request
 import uvicorn
 
 from langport.constants import LOGDIR, ErrorCode
@@ -48,7 +49,7 @@ class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 redirect_rules = None
-def redirect_model_name(model:str):
+def redirect_model_name(model: str):
     if redirect_rules is not None:
         for rule in redirect_rules:
             from_model_name, to_model_name = rule.split(":")
@@ -60,7 +61,7 @@ def redirect_model_name(model:str):
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
+async def validation_exception_handler(request: Request, exc):
     return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
 
 
@@ -87,6 +88,7 @@ async def completions(request: CompletionRequest):
 
 @app.post("/v1/embeddings")
 async def embeddings(request: EmbeddingsRequest):
+    logger.info(request.json())
     request.model = redirect_model_name(request.model)
     response = await api_embeddings(app.app_settings, request)
     return response

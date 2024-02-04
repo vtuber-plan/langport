@@ -76,7 +76,7 @@ class BaseWorkerTask(BaseModel):
 
 class EmbeddingsTask(BaseWorkerTask):
     model: str
-    input: str
+    input: Union[str, List[str]]
     user: Optional[str] = None
 
 class GenerationTask(BaseWorkerTask):
@@ -103,8 +103,12 @@ class BaseWorkerResult(BaseModel):
     message: Optional[str] = None
     error_code: int = ErrorCode.OK
 
-class EmbeddingWorkerResult(BaseWorkerResult):
+class EmbeddingsObject(BaseModel):
     embedding: List[float]
+    index: int
+
+class EmbeddingWorkerResult(BaseWorkerResult):
+    embeddings: List[EmbeddingsObject]
     usage: UsageInfo = None
 
 class GenerationWorkerLogprobs(BaseModel):
