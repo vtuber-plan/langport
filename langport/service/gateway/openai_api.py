@@ -25,8 +25,8 @@ from langport.routers.gateway.common import AppSettings, create_error_response
 from langport.routers.gateway.openai_compatible import api_chat_completions, api_completions, api_embeddings, api_models
 from langport.utils import build_logger
 
-current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-logger = build_logger("openai_api", f"openai_api_{current_time}.log")
+# current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+logger = build_logger("openai_api", "openai_api.log")
 app = fastapi.FastAPI(debug=False)
 
 class BaseAuthorizationMiddleware(BaseHTTPMiddleware):

@@ -104,14 +104,27 @@ def get_gen_params(
         "stop_token_ids": conv.settings.stop_token_ids,
     }
 
+    stop_str = []
+    conv_stop_str = conv.settings.stop_str
+    if isinstance(conv_stop_str, str):
+        stop_str.append(conv_stop_str)
+    elif isinstance(conv_stop_str, list) or isinstance(conv_stop_str, tuple):
+        if len(conv_stop_str) > 0 and not isinstance(conv_stop_str[0], str):
+            raise Exception("The type of stop_str shall be str or list of str")
+        stop_str = conv_stop_str
+    else:
+        raise Exception("The type of stop_str shall be str or list of str")
+    print(stop_str)
     if stop is None:
         gen_params.update(
-            {"stop": conv.settings.stop_str}
+            {"stop": stop_str}
         )
     elif isinstance(stop, str):
-        gen_params.update({"stop": [stop, conv.settings.stop_str]})
+        gen_params.update({"stop": [stop,] + stop_str})
+    elif isinstance(stop, list) or isinstance(stop, tuple):
+        gen_params.update({"stop": stop + stop_str})
     else:
-        gen_params.update({"stop": stop + [conv.settings.stop_str]})
+        raise Exception(f"The type of stop shall be str or list of str, the type of stop is {type(stop)}")
     
     if presence_penalty is not None:
         gen_params["presence_penalty"] = presence_penalty
