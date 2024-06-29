@@ -21,7 +21,7 @@ from langport.protocol.openai_api_protocol import (
     CompletionRequest,
     EmbeddingsRequest,
 )
-from langport.routers.gateway.common import AppSettings, create_error_response
+from langport.routers.gateway.common import AppSettings, create_bad_request_response
 from langport.routers.gateway.openai_compatible import api_chat_completions, api_completions, api_embeddings, api_models
 from langport.utils import build_logger
 
@@ -59,16 +59,14 @@ def redirect_model_name(model: str):
                 break
     return model
 
-
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc):
-    return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
-
+    logger.error(f"Invalid request: {await request.body()}")
+    return create_bad_request_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
 
 @app.get("/v1/models")
 async def models():
     return await api_models(app.app_settings)
-
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
@@ -85,14 +83,12 @@ async def completions(request: CompletionRequest):
     response = await api_completions(app.app_settings, request)
     return response
 
-
 @app.post("/v1/embeddings")
 async def embeddings(request: EmbeddingsRequest):
     logger.info(request.json())
     request.model = redirect_model_name(request.model)
     response = await api_embeddings(app.app_settings, request)
     return response
-
 
 if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
     parser = argparse.ArgumentParser(

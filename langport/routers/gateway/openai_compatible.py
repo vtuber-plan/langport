@@ -39,7 +39,7 @@ from langport.protocol.worker_protocol import (
     GenerationWorkerResult,
 )
 from langport.core.dispatch import DispatchMethod
-from langport.routers.gateway.common import LANGPORT_HEADER, AppSettings, _get_worker_address, _list_models, check_model, check_requests, create_error_response
+from langport.routers.gateway.common import LANGPORT_HEADER, AppSettings, _get_worker_address, _list_models, check_model, check_requests, create_bad_request_response
 
 def clean_system_prompts(messages: List[Dict[str, str]]):
     system_prompt = ""
@@ -332,7 +332,7 @@ async def completions_non_stream(app_settings: AppSettings, payload: Dict[str, A
     for i, content_task in enumerate(completions):
         content = await content_task
         if content.error_code != ErrorCode.OK:
-            return create_error_response(content.error_code, content.message)
+            return create_bad_request_response(content.error_code, content.message)
         if content.logprobs is None:
             logprobs = None
         else:
@@ -371,9 +371,9 @@ async def chat_completions_non_stream(app_settings: AppSettings, payload: Dict[s
     for i, content_task in enumerate(chat_completions):
         content = await content_task
         if content is None:
-            return create_error_response(ErrorCode.INTERNAL_ERROR, "Server internal error")
+            return create_bad_request_response(ErrorCode.INTERNAL_ERROR, "Server internal error")
         if content.error_code != ErrorCode.OK:
-            return create_error_response(content.error_code, content.message)
+            return create_bad_request_response(content.error_code, content.message)
         choices.append(
             ChatCompletionResponseChoice(
                 index=i,
@@ -456,7 +456,7 @@ async def api_embeddings(app_settings: AppSettings, request: EmbeddingsRequest):
 
     response = await get_embedding(app_settings, payload)
     if response.type == "error":
-        return create_error_response(ErrorCode.INTERNAL_ERROR, response.message)
+        return create_bad_request_response(ErrorCode.INTERNAL_ERROR, response.message)
     return EmbeddingsResponse(
         data=[EmbeddingsData(embedding=each.embedding, index=each.index) for each in response.embeddings],
         model=request.model,

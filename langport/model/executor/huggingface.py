@@ -96,7 +96,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
                 model_path, low_cpu_mem_usage=True, trust_remote_code=True, **from_pretrained_kwargs
             )
         elif isinstance(adapter, QwenAdapter):
-            trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", False)
+            trust_remote_code = from_pretrained_kwargs.get("trust_remote_code", True)
             tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, trust_remote_code=trust_remote_code)
             model = AutoModelForCausalLM.from_pretrained(
                 model_path, low_cpu_mem_usage=True, **from_pretrained_kwargs
