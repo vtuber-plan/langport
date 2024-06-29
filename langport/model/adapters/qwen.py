@@ -5,7 +5,7 @@ from langport.model.model_adapter import BaseAdapter
 
 
 class QwenAdapter(BaseAdapter):
-    """The model adapter for Robin"""
+    """The model adapter for Qwen"""
 
     def match(self, model_path: str):
         if model_path.endswith('/'):

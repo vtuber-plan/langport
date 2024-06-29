@@ -280,13 +280,17 @@ class HuggingfaceExecutor(LocalModelExecutor):
                         )
                 else:
                     if "8" in quantization:
-                        model, tokenizer = load_compress_model(
-                            model_path=model_path, device=device, compression_config=default_compression_config, **kwargs
-                        )
+                        # model, tokenizer = load_compress_model(
+                        #     model_path=model_path, device=device, compression_config=default_compression_config, **kwargs
+                        # )
+                        kwargs["load_in_8bit"] = True
+                        model, tokenizer = self._load_hf_model(adapter, model_path, kwargs)
                     elif "4" in quantization:
-                        model, tokenizer = load_compress_model(
-                            model_path=model_path, device=device, compression_config=bit4_compression_config, **kwargs
-                        )
+                        # model, tokenizer = load_compress_model(
+                        #     model_path=model_path, device=device, compression_config=bit4_compression_config, **kwargs
+                        # )
+                        kwargs["load_in_4bit"] = True
+                        model, tokenizer = self._load_hf_model(adapter, model_path, kwargs)
                     else:
                         model, tokenizer = load_compress_model(
                             model_path=model_path, device=device, compression_config=default_compression_config, **kwargs
@@ -318,7 +322,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
             ds_engine = deepspeed.init_inference(model=model, config=config)
             model = ds_engine.module
         else:
-            if (device == "cuda" and num_gpus == 1 and not cpu_offloading) or device == "mps":
+            if (device == "cuda" and num_gpus == 1 and not cpu_offloading and quantization is None) or device == "mps":
                 model.to(device)
 
         if debug:
