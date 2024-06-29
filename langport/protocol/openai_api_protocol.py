@@ -120,10 +120,12 @@ class EmbeddingsRequest(BaseModel):
     model: str
     input: Union[str, List[str]]
     user: Optional[str] = None
+    encoding_format: Optional[Literal["float", "base64"]] = None
+    dimensions: Optional[int] = None
 
 class EmbeddingsData(BaseModel):
     object: str = "embedding"
-    embedding: List[float]
+    embedding: Union[List[float], str]
     index: int
 
 class EmbeddingsResponse(BaseModel):

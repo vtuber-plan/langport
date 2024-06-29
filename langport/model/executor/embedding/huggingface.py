@@ -163,19 +163,19 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
                 data = model(**encoded_prompts)
             # embeddings = torch.mean(data, dim=1)
             embeddings = self._mean_pooling(data, encoded_prompts['attention_mask'])
-            for task_i in range(len(tasks)):
+            for task_i, cur_task in enumerate(tasks):
                 token_num = 0
                 embedding_list = []
                 for prompt_i in range(len(prompts)):
                     if prompts_index[prompt_i] == task_i:
-                        token_num += len(tokenizer(prompts[i]).input_ids)
+                        token_num += len(tokenizer(prompts[prompt_i]).input_ids)
                         embedding_list.append(EmbeddingsObject(index=task_i, embedding=embeddings[prompt_i].tolist()))
                 worker.push_task_result(
-                    tasks[i].task_id,
+                    cur_task.task_id,
                     EmbeddingWorkerResult(
-                        task_id=tasks[i].task_id,
+                        task_id=cur_task.task_id,
                         type="data",
-                        embedding=embedding_list,
+                        embeddings=embedding_list,
                         usage=UsageInfo(prompt_tokens=token_num, total_tokens=token_num),
                     )
                 )

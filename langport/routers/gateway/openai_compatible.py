@@ -1,6 +1,7 @@
 import asyncio
 
 import asyncio
+import base64
 import json
 
 from typing import Coroutine, Generator, Optional, Union, Dict, List, Any
@@ -8,6 +9,8 @@ from typing import Coroutine, Generator, Optional, Union, Dict, List, Any
 from fastapi.responses import StreamingResponse
 import httpx
 import shortuuid
+
+import numpy as np
 
 from langport.constants import WORKER_API_TIMEOUT, ErrorCode
 from langport.model.model_adapter import get_conversation_template
@@ -452,17 +455,36 @@ async def api_embeddings(app_settings: AppSettings, request: EmbeddingsRequest):
     payload = {
         "model": request.model,
         "input": request.input,
+        "dimensions": request.dimensions,
     }
 
     response = await get_embedding(app_settings, payload)
     if response.type == "error":
         return create_bad_request_response(ErrorCode.INTERNAL_ERROR, response.message)
-    return EmbeddingsResponse(
-        data=[EmbeddingsData(embedding=each.embedding, index=each.index) for each in response.embeddings],
-        model=request.model,
-        usage=UsageInfo(
-            prompt_tokens=response.usage.prompt_tokens,
-            total_tokens=response.usage.total_tokens,
-            completion_tokens=None,
-        ),
-    ).dict(exclude_none=True)
+    
+    if request.encoding_format is None or request.encoding_format == "float":
+        return EmbeddingsResponse(
+            data=[EmbeddingsData(embedding=each.embedding, index=each.index) for each in response.embeddings],
+            model=request.model,
+            usage=UsageInfo(
+                prompt_tokens=response.usage.prompt_tokens,
+                total_tokens=response.usage.total_tokens,
+                completion_tokens=None,
+            ),
+        ).dict(exclude_none=True)
+    elif request.encoding_format == "base64":
+        return EmbeddingsResponse(
+            data=[EmbeddingsData(
+                embedding=base64.b64encode(np.array(each.embedding, dtype="float32").tobytes()).decode("utf-8"),
+                index=each.index
+                ) for each in response.embeddings
+            ],
+            model=request.model,
+            usage=UsageInfo(
+                prompt_tokens=response.usage.prompt_tokens,
+                total_tokens=response.usage.total_tokens,
+                completion_tokens=None,
+            ),
+        ).dict(exclude_none=True)
+    else:
+        raise Exception("Invalid encoding_format param.")

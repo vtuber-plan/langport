@@ -78,6 +78,7 @@ class EmbeddingsTask(BaseWorkerTask):
     model: str
     input: Union[str, List[str]]
     user: Optional[str] = None
+    dimensions: Optional[int] = None
 
 class GenerationTask(BaseWorkerTask):
     prompt: str
