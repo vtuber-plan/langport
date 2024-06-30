@@ -59,35 +59,50 @@ def redirect_model_name(model: str):
                 break
     return model
 
+def check_and_log_response(response):
+    if isinstance(response, JSONResponse):
+        response_body = json.loads(response.body)
+        if "object" in response_body and response_body["object"] == "error":
+            if "object" in response_body and "message" in response_body and "code" in response_body:
+                logger.error(f"[{response_body['object']}] [{response_body['code']}] - {response_body['message']}")
+            else:
+                logger.error(response.body)
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc):
-    logger.error(f"Invalid request: {await request.body()}")
-    return create_bad_request_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
+    logger.error(f"Invalid request: {(await request.body()).decode('utf-8')}")
+    response = create_bad_request_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
+    check_and_log_response(response)
+    return response
 
 @app.get("/v1/models")
 async def models():
-    return await api_models(app.app_settings)
+    response = await api_models(app.app_settings)
+    check_and_log_response(response)
+    return response
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
-    logger.info(request.json())
+    logger.info(json.dumps(json.loads(request.model_dump_json()), ensure_ascii=False))
     request.model = redirect_model_name(request.model)
     response = await api_chat_completions(app.app_settings, request)
-    
+    check_and_log_response(response)
     return response
 
 @app.post("/v1/completions")
 async def completions(request: CompletionRequest):
-    logger.info(request.json())
+    logger.info(json.dumps(json.loads(request.model_dump_json()), ensure_ascii=False))
     request.model = redirect_model_name(request.model)
     response = await api_completions(app.app_settings, request)
+    check_and_log_response(response)
     return response
 
 @app.post("/v1/embeddings")
 async def embeddings(request: EmbeddingsRequest):
-    logger.info(request.json())
+    logger.info(json.dumps(json.loads(request.model_dump_json()), ensure_ascii=False))
     request.model = redirect_model_name(request.model)
     response = await api_embeddings(app.app_settings, request)
+    check_and_log_response(response)
     return response
 
 if __name__ in ["__main__", "langport.service.gateway.openai_api"]:

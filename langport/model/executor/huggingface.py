@@ -193,7 +193,7 @@ class HuggingfaceExecutor(LocalModelExecutor):
             kwargs["offload_folder"] = offload_folder
 
         model = SentenceTransformer(model_path, device=device, trust_remote_code=trust_remote_code, model_kwargs=kwargs)
-        tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, trust_remote_code=trust_remote_code)
+        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=trust_remote_code)
         return adapter, model, tokenizer
 
     def load_model(

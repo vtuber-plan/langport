@@ -61,20 +61,21 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
                 model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading,
                 deepspeed, gptq, group_size, trust_remote_code, offload_folder
             )
+            if hasattr(self.model, "max_seq_length"):
+                self._context_len = self.model.max_seq_length
+            else:
+                self._context_len = 2048
         else:
             self.adapter, self.model, self.tokenizer = self.load_model(
                 model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading,
                 deepspeed, gptq, group_size, trust_remote_code, offload_folder
             )
-
-        if hasattr(self.model, "max_seq_length"):
-            self._context_len = self.model.max_seq_length
-        elif hasattr(self.model.config, "max_sequence_length"):
-            self._context_len = self.model.config.max_sequence_length
-        elif hasattr(self.model.config, "max_position_embeddings"):
-            self._context_len = self.model.config.max_position_embeddings
-        else:
-            self._context_len = 2048
+            if hasattr(self.model.config, "max_sequence_length"):
+                self._context_len = self.model.config.max_sequence_length
+            elif hasattr(self.model.config, "max_position_embeddings"):
+                self._context_len = self.model.config.max_position_embeddings
+            else:
+                self._context_len = 2048
     
     def _record_call_time(self):
         self.last_call_time = time.time()
@@ -182,7 +183,7 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
                 else:
                     data = model(**encoded_prompts)
                 # embeddings = torch.mean(data, dim=1)
-                embeddings = self._mean_pooling(data, encoded_prompts['attention_mask'])
+                embeddings = self._mean_pooling(data, encoded_prompts['attention_mask']).cpu()
             else:
                 embeddings = model.encode(prompts)
 
