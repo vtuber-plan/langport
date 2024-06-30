@@ -112,6 +112,12 @@ python -m langport.service.server.generation_worker --port 21001 --model-path <y
 python -m langport.service.gateway.openai_api
 ```
 
+If you need a single node embeddings API server:
+```bash
+python -m langport.service.server.embedding_worker --port 21002 --model-path bert-base-chinese --gpus 0 --num-gpus 1
+python -m langport.service.gateway.openai_api --port 8000 --controller-address http://localhost:21002
+```
+
 If you need the embeddings API or other features, you can deploy a distributed inference cluster:
 ``` bash
 python -m langport.service.server.dummy_worker --port 21001

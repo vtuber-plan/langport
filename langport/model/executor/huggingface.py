@@ -141,6 +141,61 @@ class HuggingfaceExecutor(LocalModelExecutor):
 
         return model, tokenizer
 
+    def load_sentence_transformer_model(
+        self,
+        model_path: str,
+        device: str,
+        num_gpus: int,
+        max_gpu_memory: Optional[str] = None,
+        quantization: Optional[str] = None,
+        cpu_offloading: bool = False,
+        deepspeed: bool = False,
+        gptq: bool = False,
+        group_size: Optional[int] = None,
+        trust_remote_code: bool = False,
+        offload_folder: Optional[str] = None,
+        debug: bool = False,
+    ):
+        """Load a model from Hugging Face."""
+        from sentence_transformers import SentenceTransformer
+        adapter = get_model_adapter(model_path)
+
+        kwargs = {}
+        if device == "cpu":
+            kwargs["torch_dtype"] = torch.float32
+        elif device == "cuda":
+            kwargs["torch_dtype"] = torch.float16
+            if num_gpus != 1:
+                kwargs["device_map"] = "auto"
+                if max_gpu_memory is None:
+                    kwargs["device_map"] = "sequential"  # This is important for not the same VRAM sizes
+                    available_gpu_memory = get_gpu_memory(num_gpus)
+                    if len(available_gpu_memory) == 0:
+                        kwargs["device_map"] = "auto"
+                    elif all([mem == available_gpu_memory[0] for mem in available_gpu_memory]):
+                        kwargs["device_map"] = "balanced"
+                    else:
+                        kwargs["max_memory"] = {
+                            i: str(int(available_gpu_memory[i] * 0.55)) + "GiB"
+                            for i in range(num_gpus)
+                        }
+                else:
+                    kwargs["max_memory"] = {i: max_gpu_memory for i in range(num_gpus)}
+        elif device == "mps":
+            kwargs["torch_dtype"] = torch.float16
+            # Avoid bugs in mps backend by not using in-place operations.
+            replace_llama_attn_with_non_inplace_operations()
+        else:
+            raise ValueError(f"Invalid device: {device}")
+
+        kwargs["trust_remote_code"] = trust_remote_code
+        if offload_folder is not None:
+            kwargs["offload_folder"] = offload_folder
+
+        model = SentenceTransformer(model_path, device=device, trust_remote_code=trust_remote_code, model_kwargs=kwargs)
+        tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, trust_remote_code=trust_remote_code)
+        return adapter, model, tokenizer
+
     def load_model(
         self,
         model_path: str,

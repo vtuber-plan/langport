@@ -1,12 +1,13 @@
+import os
 import time
 import traceback
 from typing import List, Optional
 
 import torch
+from huggingface_hub import hf_hub_download
 from langport.model.executor.huggingface import HuggingfaceExecutor
 from langport.protocol.worker_protocol import BaseWorkerResult, EmbeddingWorkerResult, EmbeddingsObject, UsageInfo
 from langport.workers.embedding_worker import EmbeddingModelWorker
-
 
 class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
     def __init__(
@@ -46,11 +47,29 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
         self.adapter = None
         self.model = None
         self.tokenizer = None
-        self.adapter, self.model, self.tokenizer = self.load_model(
-            model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading, deepspeed, gptq, group_size, trust_remote_code, offload_folder
-        )
 
-        if hasattr(self.model.config, "max_sequence_length"):
+        if os.path.exists(model_path):
+            if not os.path.exists(os.path.join(model_path, "modules.json")):
+                modules_file = ""
+            else:
+                with open(os.path.join(model_path, "modules.json"), "r", encoding="utf-8") as f:
+                    modules_file = f.read()
+        else:
+            modules_file = hf_hub_download(repo_id=model_path, filename="modules.json")
+        if "sentence_transformers" in modules_file:
+            self.adapter, self.model, self.tokenizer = self.load_sentence_transformer_model(
+                model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading,
+                deepspeed, gptq, group_size, trust_remote_code, offload_folder
+            )
+        else:
+            self.adapter, self.model, self.tokenizer = self.load_model(
+                model_path, device, num_gpus, max_gpu_memory, quantization, cpu_offloading,
+                deepspeed, gptq, group_size, trust_remote_code, offload_folder
+            )
+
+        if hasattr(self.model, "max_seq_length"):
+            self._context_len = self.model.max_seq_length
+        elif hasattr(self.model.config, "max_sequence_length"):
             self._context_len = self.model.config.max_sequence_length
         elif hasattr(self.model.config, "max_position_embeddings"):
             self._context_len = self.model.config.max_position_embeddings
@@ -93,7 +112,7 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
     def tokenize(self, text: str) -> List[int]:
         input_ids = self.tokenizer(text).input_ids
         return input_ids
-    
+
     # Mean Pooling - Take attention mask into account for correct averaging
     def _mean_pooling(self, model_output, attention_mask):
         token_embeddings = model_output[0]  # First element of model_output contains all token embeddings
@@ -130,7 +149,7 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
                 prompts_index.extend([task_i] * len(task_input))
             else:
                 raise Exception("Invalid prompt type...")
-            
+
         try:
             tokenizer = self.tokenizer
             model = self.model
@@ -141,28 +160,32 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
             if tokenizer._pad_token is None:
                 tokenizer.pad_token = tokenizer.eos_token
 
-            encoded_prompts = tokenizer(prompts, return_tensors="pt", padding="longest").to(self.device)
-            input_ids = encoded_prompts.input_ids
-            if model.config.is_encoder_decoder:
-                decoder_input_ids = torch.full(
-                    (len(prompts), 1),
-                    model.generation_config.decoder_start_token_id,
-                    dtype=torch.long,
-                    device=self.device,
-                )
-                model_output = model(input_ids, decoder_input_ids=decoder_input_ids, output_hidden_states=True)
-                data = model_output.decoder_hidden_states[-1]
-            elif model.config.is_decoder:
-                model_output = model(input_ids, output_hidden_states=True)
-                is_chatglm = "chatglm" in str(type(model)).lower()
-                if is_chatglm:
-                    data = model_output.hidden_states[-1].transpose(0, 1)
+            if model.__class__.__module__ + '.' + model.__class__.__name__ != 'sentence_transformers.SentenceTransformer.SentenceTransformer':
+                encoded_prompts = tokenizer(prompts, return_tensors="pt", padding="longest").to(self.device)
+                input_ids = encoded_prompts.input_ids
+                if model.config.is_encoder_decoder:
+                    decoder_input_ids = torch.full(
+                        (len(prompts), 1),
+                        model.generation_config.decoder_start_token_id,
+                        dtype=torch.long,
+                        device=self.device,
+                    )
+                    model_output = model(input_ids, decoder_input_ids=decoder_input_ids, output_hidden_states=True)
+                    data = model_output.decoder_hidden_states[-1]
+                elif model.config.is_decoder:
+                    model_output = model(input_ids, output_hidden_states=True)
+                    is_chatglm = "chatglm" in str(type(model)).lower()
+                    if is_chatglm:
+                        data = model_output.hidden_states[-1].transpose(0, 1)
+                    else:
+                        data = model_output.hidden_states[-1]
                 else:
-                    data = model_output.hidden_states[-1]
+                    data = model(**encoded_prompts)
+                # embeddings = torch.mean(data, dim=1)
+                embeddings = self._mean_pooling(data, encoded_prompts['attention_mask'])
             else:
-                data = model(**encoded_prompts)
-            # embeddings = torch.mean(data, dim=1)
-            embeddings = self._mean_pooling(data, encoded_prompts['attention_mask'])
+                embeddings = model.encode(prompts)
+
             for task_i, cur_task in enumerate(tasks):
                 token_num = 0
                 embedding_list = []
