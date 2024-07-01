@@ -198,7 +198,7 @@ async def generate_completion_stream_generator(app_settings: AppSettings, payloa
     yield "data: [DONE]\n\n"
 
 
-async def generate_completion_stream(app_settings: AppSettings, url: str, payload: Dict[str, Any]) -> AsyncGenerator[GenerationWorkerResult, Any, None]:
+async def generate_completion_stream(app_settings: AppSettings, url: str, payload: Dict[str, Any]) -> AsyncGenerator[GenerationWorkerResult, None]:
     async with httpx.AsyncClient() as client:
         try:
             worker_addr = await _get_worker_address(app_settings, payload["model"], "generation", client, DispatchMethod.LOTTERY)
@@ -252,7 +252,7 @@ async def single_completions_non_stream(app_settings: AppSettings, payload: Dict
 
 async def chat_completion_stream_generator(
     app_settings: AppSettings, payload: Dict[str, Any], n: int
-) -> AsyncGenerator[str, Any, None]:
+) -> AsyncGenerator[str, None]:
     """
     Event stream format:
     https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#event_stream_format
