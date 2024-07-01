@@ -1,8 +1,9 @@
-fastapi==0.95.1
+fastapi==0.111.0
 httpx==0.24.0
 numpy==1.24.3
 psutil==5.9.5
-pydantic==1.10.8
+pydantic==2.7.4
+pydantic-settings==2.3.4
 requests==2.30.0
 shortuuid==1.0.11
 tenacity==8.2.2
