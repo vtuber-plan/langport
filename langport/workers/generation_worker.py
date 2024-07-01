@@ -66,20 +66,30 @@ class GenerationModelWorker(ClusterWorker):
         context_length = self.executor.context_length
 
         if context_length is not None and prompt_tokens + max_tokens > context_length:
+            ooc_message = f"This model's maximum context length is {context_length} tokens. "
+            f"However, you requested {max_tokens + prompt_tokens} tokens "
+            f"({prompt_tokens} in the messages, "
+            f"{max_tokens} in the completion). "
+            f"Please reduce the length of the messages or completion."
+            self.logger.info(ooc_message)
             yield BaseWorkerResult(task_id=task.task_id,
                                    type="error",
-                                   message=f"This model's maximum context length is {context_length} tokens. "
-                                    f"However, you requested {max_tokens + prompt_tokens} tokens "
-                                    f"({prompt_tokens} in the messages, "
-                                    f"{max_tokens} in the completion). "
-                                    f"Please reduce the length of the messages or completion.",
+                                   message=ooc_message,
                                     error_code=ErrorCode.CONTEXT_OVERFLOW
                                    )
             return
 
         await self.add_task(task)
-        async for chunk in self.fetch_task_result(task.task_id):
-            yield chunk
+        try:
+            async for chunk in self.fetch_task_result(task.task_id):
+                yield chunk
+        except Exception as e:
+            self.logger.error(str(e))
+            yield BaseWorkerResult(task_id=task.task_id,
+                        type="error",
+                        message=str(e),
+                        error_code=ErrorCode.INTERNAL_ERROR
+            )
 
     async def generation_bytes_stream(self, task: GenerationTask):
         async for chunk in self.generation_stream(task):

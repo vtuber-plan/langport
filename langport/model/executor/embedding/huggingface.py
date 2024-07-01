@@ -8,6 +8,7 @@ from huggingface_hub import hf_hub_download
 from langport.model.executor.huggingface import HuggingfaceExecutor
 from langport.protocol.worker_protocol import BaseWorkerResult, EmbeddingWorkerResult, EmbeddingsObject, UsageInfo
 from langport.workers.embedding_worker import EmbeddingModelWorker
+from langport.utils.itertools import batched
 
 class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
     def __init__(
@@ -120,6 +121,37 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
         return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
     
+    def inference_batch(self, prompts: List[str]) -> List[str]:
+        tokenizer = self.tokenizer
+        model = self.model
+        if model.__class__.__module__ + '.' + model.__class__.__name__ != 'sentence_transformers.SentenceTransformer.SentenceTransformer':
+            encoded_prompts = tokenizer(prompts, return_tensors="pt", padding="longest").to(self.device)
+            input_ids = encoded_prompts.input_ids
+            if model.config.is_encoder_decoder:
+                decoder_input_ids = torch.full(
+                    (len(prompts), 1),
+                    model.generation_config.decoder_start_token_id,
+                    dtype=torch.long,
+                    device=self.device,
+                )
+                model_output = model(input_ids, decoder_input_ids=decoder_input_ids, output_hidden_states=True)
+                data = model_output.decoder_hidden_states[-1]
+            elif model.config.is_decoder:
+                model_output = model(input_ids, output_hidden_states=True)
+                is_chatglm = "chatglm" in str(type(model)).lower()
+                if is_chatglm:
+                    data = model_output.hidden_states[-1].transpose(0, 1)
+                else:
+                    data = model_output.hidden_states[-1]
+            else:
+                data = model(**encoded_prompts)
+            # embeddings = torch.mean(data, dim=1)
+            embeddings = self._mean_pooling(data, encoded_prompts['attention_mask']).cpu()
+        else:
+            embeddings = model.encode(prompts, show_progress_bar=False)
+        return embeddings
+
+
     @torch.inference_mode()
     def inference(self, worker: "EmbeddingModelWorker"):
         call_interval = time.time() - self.last_call_time
@@ -152,47 +184,23 @@ class HuggingfaceEmbeddingExecutor(HuggingfaceExecutor):
                 raise Exception("Invalid prompt type...")
 
         try:
-            tokenizer = self.tokenizer
-            model = self.model
-
+            batch_prompts = batched(prompts, worker.max_batch)
+            embeddings = []
+            for each_batch in batch_prompts:
+                batch_embeddings = self.inference_batch(each_batch)
+                embeddings.extend(batch_embeddings)
             # ValueError: Asking to pad but the tokenizer does not have a padding token.
             # Please select a token to use as `pad_token` `(tokenizer.pad_token = tokenizer.eos_token e.g.)`
             # or add a new pad token via `tokenizer.add_special_tokens({'pad_token': '[PAD]'})`.
-            if tokenizer._pad_token is None:
-                tokenizer.pad_token = tokenizer.eos_token
-
-            if model.__class__.__module__ + '.' + model.__class__.__name__ != 'sentence_transformers.SentenceTransformer.SentenceTransformer':
-                encoded_prompts = tokenizer(prompts, return_tensors="pt", padding="longest").to(self.device)
-                input_ids = encoded_prompts.input_ids
-                if model.config.is_encoder_decoder:
-                    decoder_input_ids = torch.full(
-                        (len(prompts), 1),
-                        model.generation_config.decoder_start_token_id,
-                        dtype=torch.long,
-                        device=self.device,
-                    )
-                    model_output = model(input_ids, decoder_input_ids=decoder_input_ids, output_hidden_states=True)
-                    data = model_output.decoder_hidden_states[-1]
-                elif model.config.is_decoder:
-                    model_output = model(input_ids, output_hidden_states=True)
-                    is_chatglm = "chatglm" in str(type(model)).lower()
-                    if is_chatglm:
-                        data = model_output.hidden_states[-1].transpose(0, 1)
-                    else:
-                        data = model_output.hidden_states[-1]
-                else:
-                    data = model(**encoded_prompts)
-                # embeddings = torch.mean(data, dim=1)
-                embeddings = self._mean_pooling(data, encoded_prompts['attention_mask']).cpu()
-            else:
-                embeddings = model.encode(prompts)
+            if self.tokenizer._pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
 
             for task_i, cur_task in enumerate(tasks):
                 token_num = 0
                 embedding_list = []
                 for prompt_i in range(len(prompts)):
                     if prompts_index[prompt_i] == task_i:
-                        token_num += len(tokenizer(prompts[prompt_i]).input_ids)
+                        token_num += len(self.tokenizer(prompts[prompt_i]).input_ids)
                         embedding_list.append(EmbeddingsObject(index=task_i, embedding=embeddings[prompt_i].tolist()))
                 worker.push_task_result(
                     cur_task.task_id,

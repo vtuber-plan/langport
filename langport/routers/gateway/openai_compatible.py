@@ -4,7 +4,7 @@ import asyncio
 import base64
 import json
 
-from typing import Coroutine, Generator, Optional, Union, Dict, List, Any
+from typing import AsyncGenerator, Coroutine, Generator, Optional, Union, Dict, List, Any
 
 from fastapi.responses import StreamingResponse
 import httpx
@@ -42,7 +42,15 @@ from langport.protocol.worker_protocol import (
     GenerationWorkerResult,
 )
 from langport.core.dispatch import DispatchMethod
-from langport.routers.gateway.common import LANGPORT_HEADER, AppSettings, _get_worker_address, _list_models, check_model, check_requests, create_bad_request_response
+from langport.routers.gateway.common import (
+    LANGPORT_HEADER,
+    AppSettings,
+    _get_worker_address,
+    _list_models,
+    check_model,
+    check_requests,
+    create_bad_request_response
+)
 
 def clean_system_prompts(messages: List[Dict[str, str]]):
     system_prompt = ""
@@ -190,7 +198,7 @@ async def generate_completion_stream_generator(app_settings: AppSettings, payloa
     yield "data: [DONE]\n\n"
 
 
-async def generate_completion_stream(app_settings: AppSettings, url: str, payload: Dict[str, Any]) -> Generator[GenerationWorkerResult, Any, None]:
+async def generate_completion_stream(app_settings: AppSettings, url: str, payload: Dict[str, Any]) -> AsyncGenerator[GenerationWorkerResult, Any, None]:
     async with httpx.AsyncClient() as client:
         try:
             worker_addr = await _get_worker_address(app_settings, payload["model"], "generation", client, DispatchMethod.LOTTERY)
@@ -244,7 +252,7 @@ async def single_completions_non_stream(app_settings: AppSettings, payload: Dict
 
 async def chat_completion_stream_generator(
     app_settings: AppSettings, payload: Dict[str, Any], n: int
-) -> Generator[str, Any, None]:
+) -> AsyncGenerator[str, Any, None]:
     """
     Event stream format:
     https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#event_stream_format
