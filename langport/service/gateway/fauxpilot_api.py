@@ -16,7 +16,7 @@ from fastapi.exceptions import RequestValidationError
 from langport.protocol.openai_api_protocol import (
     CompletionRequest,
 )
-from langport.routers.gateway.common import AppSettings, create_error_response
+from langport.routers.gateway.common import AppSettings, create_bad_request_response
 from langport.routers.gateway.openai_compatible import api_completions, api_models
 
 
@@ -46,7 +46,7 @@ class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
+    return create_bad_request_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
 
 
 @app.get("/v1/models")

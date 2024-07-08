@@ -76,15 +76,16 @@ class BaseWorkerTask(BaseModel):
 
 class EmbeddingsTask(BaseWorkerTask):
     model: str
-    input: str
+    input: Union[str, List[str]]
     user: Optional[str] = None
+    dimensions: Optional[int] = None
 
 class GenerationTask(BaseWorkerTask):
     prompt: str
     temperature: Optional[float] = 0.7
     repetition_penalty: Optional[float] = 0.0
     top_p: Optional[float] = 1.0
-    top_k: Optional[int] = 1
+    top_k: Optional[int] = 0
     max_tokens: Optional[int] = None
     stop: Optional[Union[List[str], str]] = None
     echo: Optional[bool] = False
@@ -103,8 +104,12 @@ class BaseWorkerResult(BaseModel):
     message: Optional[str] = None
     error_code: int = ErrorCode.OK
 
-class EmbeddingWorkerResult(BaseWorkerResult):
+class EmbeddingsObject(BaseModel):
     embedding: List[float]
+    index: int
+
+class EmbeddingWorkerResult(BaseWorkerResult):
+    embeddings: List[EmbeddingsObject]
     usage: UsageInfo = None
 
 class GenerationWorkerLogprobs(BaseModel):

@@ -2,8 +2,8 @@ from typing import List, Optional
 import warnings
 from functools import cache
 
-from langport.data.conversation import ConversationHistory, SeparatorStyle
-from langport.data.conversation.conversation_settings import get_conv_settings
+from chatproto.conversation.history import ConversationHistory
+from chatproto.registry import get_conv_settings
 from langport.model.model_adapter import BaseAdapter
 
 class BardAdapter(BaseAdapter):

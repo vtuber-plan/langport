@@ -1,7 +1,7 @@
-from langport.data.conversation import ConversationHistory, SeparatorStyle
+from chatproto.conversation.history import ConversationHistory
 from langport.model.model_adapter import BaseAdapter
 
-from langport.data.conversation.conversation_settings import get_conv_settings
+from chatproto.registry import get_conv_settings
 
 class BaizeAdapter(BaseAdapter):
     """The model adapter for project-baize/baize-lora-7B"""

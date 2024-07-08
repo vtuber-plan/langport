@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from langport.protocol.huggingface_api_protocol import Details, FinishReason, Request, Response
 from langport.protocol.openai_api_protocol import CompletionRequest as OpenAICompletionRequest
 
-from langport.routers.gateway.common import AppSettings, check_model, create_error_response
+from langport.routers.gateway.common import AppSettings, check_model, create_bad_request_response
 from langport.routers.gateway.openai_compatible import completions_non_stream, get_gen_params
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
+    return create_bad_request_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
 
 
 @app.post("/")

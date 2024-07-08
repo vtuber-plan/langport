@@ -8,8 +8,8 @@ from typing import List
 import warnings
 from functools import cache
 
-from langport.data.conversation import ConversationHistory, SeparatorStyle
-from langport.data.conversation.conversation_settings import get_conv_settings
+from chatproto.conversation.history import ConversationHistory
+from chatproto.registry import get_conv_settings
 
 
 class BaseAdapter:

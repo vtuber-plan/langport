@@ -35,16 +35,20 @@ from langport.constants import WORKER_API_TIMEOUT, ErrorCode
 from langport.model.model_adapter import get_conversation_template
 from fastapi.exceptions import RequestValidationError
 
-
 class AppSettings(BaseSettings):
     # The address of the model controller.
     controller_address: str = "http://localhost:21001"
 
 LANGPORT_HEADER = {"User-Agent": "Langport API Server"}
 
-def create_error_response(code: int, message: str) -> JSONResponse:
+def create_server_error_response(code: int, message: str) -> JSONResponse:
     return JSONResponse(
         ErrorResponse(message=message, code=code).dict(), status_code=500
+    )
+
+def create_bad_request_response(code: int, message: str) -> JSONResponse:
+    return JSONResponse(
+        ErrorResponse(message=message, code=code).dict(), status_code=400
     )
 
 
@@ -142,74 +146,75 @@ async def check_model(app_settings: AppSettings, request, feature: str, model_na
         try:
             models = await _list_models(app_settings, feature, client)
         except Exception as e:
-            ret = create_error_response(
+            ret = create_bad_request_response(
                 ErrorCode.INVALID_MODEL,
                 str(e),
             )
             return ret
         if len(models) == 0 or model_name not in models:
-            ret = create_error_response(
+            models_unique = list(set(models))
+            ret = create_bad_request_response(
                 ErrorCode.INVALID_MODEL,
-                f"Only {'&&'.join(models)} allowed now, your model {model_name}",
+                f"Only {'&&'.join(models_unique)} allowed now, your model {model_name}",
             )
     return ret
 
 def check_requests(request) -> Optional[JSONResponse]:
     # Check all params
     if request.max_tokens is not None and request.max_tokens <= 0:
-        return create_error_response(
+        return create_bad_request_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.max_tokens} is less than the minimum of 1 - 'max_tokens'",
         )
     if request.n is not None and request.n <= 0:
-        return create_error_response(
+        return create_bad_request_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.n} is less than the minimum of 1 - 'n'",
         )
     if request.temperature is not None and request.temperature < 0:
-        return create_error_response(
+        return create_bad_request_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.temperature} is less than the minimum of 0 - 'temperature'",
         )
     if request.temperature is not None and request.temperature > 2:
-        return create_error_response(
+        return create_bad_request_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.temperature} is greater than the maximum of 2 - 'temperature'",
         )
     if request.top_p is not None and request.top_p < 0:
-        return create_error_response(
+        return create_bad_request_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.top_p} is less than the minimum of 0 - 'top_p'",
         )
     if request.top_p is not None and request.top_p > 1:
-        return create_error_response(
+        return create_bad_request_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.top_p} is greater than the maximum of 1 - 'temperature'",
         )
     if request.stop is not None and (
         not isinstance(request.stop, str) and not isinstance(request.stop, list)
     ):
-        return create_error_response(
+        return create_bad_request_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.stop} is not valid under any of the given schemas - 'stop'",
         )
     if request.presence_penalty is not None and request.presence_penalty < -2.0:
-        return create_error_response(
+        return create_bad_request_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.presence_penalty} is less than the minimum of -2.0 - 'presence_penalty'",
         )
     if request.presence_penalty is not None and request.presence_penalty > 2.0:
-        return create_error_response(
+        return create_bad_request_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.presence_penalty} is less than the maximum of 2.0 - 'presence_penalty'",
         )
     if request.frequency_penalty is not None and request.frequency_penalty < -2.0:
-        return create_error_response(
+        return create_bad_request_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.frequency_penalty} is less than the minimum of -2.0 - 'frequency_penalty'",
         )
     if request.frequency_penalty is not None and request.frequency_penalty > 2.0:
-        return create_error_response(
+        return create_bad_request_response(
             ErrorCode.PARAM_OUT_OF_RANGE,
             f"{request.frequency_penalty} is less than the maximum of 2.0 - 'frequency_penalty'",
         )

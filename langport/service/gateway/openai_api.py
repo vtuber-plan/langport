@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, DispatchFunction
 from starlette.types import ASGIApp
+from starlette.requests import Request
 import uvicorn
 
 from langport.constants import LOGDIR, ErrorCode
@@ -20,12 +21,12 @@ from langport.protocol.openai_api_protocol import (
     CompletionRequest,
     EmbeddingsRequest,
 )
-from langport.routers.gateway.common import AppSettings, create_error_response
+from langport.routers.gateway.common import AppSettings, create_bad_request_response
 from langport.routers.gateway.openai_compatible import api_chat_completions, api_completions, api_embeddings, api_models
 from langport.utils import build_logger
 
-current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-logger = build_logger("openai_api", f"openai_api_{current_time}.log")
+# current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+logger = build_logger("openai_api", "openai_api.log")
 app = fastapi.FastAPI(debug=False)
 
 class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
@@ -48,7 +49,7 @@ class BaseAuthorizationMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 redirect_rules = None
-def redirect_model_name(model:str):
+def redirect_model_name(model: str):
     if redirect_rules is not None:
         for rule in redirect_rules:
             from_model_name, to_model_name = rule.split(":")
@@ -58,38 +59,51 @@ def redirect_model_name(model:str):
                 break
     return model
 
+def check_and_log_response(response):
+    if isinstance(response, JSONResponse):
+        response_body = json.loads(response.body)
+        if "object" in response_body and response_body["object"] == "error":
+            if "object" in response_body and "message" in response_body and "code" in response_body:
+                logger.error(f"[{response_body['object']}] [{response_body['code']}] - {response_body['message']}")
+            else:
+                logger.error(response.body)
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    return create_error_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
-
+async def validation_exception_handler(request: Request, exc):
+    logger.error(f"Invalid request: {(await request.body()).decode('utf-8')}")
+    response = create_bad_request_response(ErrorCode.VALIDATION_TYPE_ERROR, str(exc))
+    check_and_log_response(response)
+    return response
 
 @app.get("/v1/models")
 async def models():
-    return await api_models(app.app_settings)
-
+    response = await api_models(app.app_settings)
+    check_and_log_response(response)
+    return response
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
+    logger.info(json.dumps(json.loads(request.model_dump_json()), ensure_ascii=False))
     request.model = redirect_model_name(request.model)
     response = await api_chat_completions(app.app_settings, request)
-    logger.info(request.json())
+    check_and_log_response(response)
     return response
 
 @app.post("/v1/completions")
 async def completions(request: CompletionRequest):
+    logger.info(json.dumps(json.loads(request.model_dump_json()), ensure_ascii=False))
     request.model = redirect_model_name(request.model)
     response = await api_completions(app.app_settings, request)
-    logger.info(request.json())
+    check_and_log_response(response)
     return response
-
 
 @app.post("/v1/embeddings")
 async def embeddings(request: EmbeddingsRequest):
+    logger.info(json.dumps(json.loads(request.model_dump_json()), ensure_ascii=False))
     request.model = redirect_model_name(request.model)
     response = await api_embeddings(app.app_settings, request)
+    check_and_log_response(response)
     return response
-
 
 if __name__ in ["__main__", "langport.service.gateway.openai_api"]:
     parser = argparse.ArgumentParser(

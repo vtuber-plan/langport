@@ -340,7 +340,7 @@ def load_compress_model(model_path, device, compression_config: CompressionConfi
         config = AutoConfig.from_pretrained(
             model_path, low_cpu_mem_usage=True, **kwargs
         )
-        model: nn.Module = AutoModelForCausalLM.from_config(config)
+        model: nn.Module = AutoModelForCausalLM.from_config(config, trust_remote_code=trust_remote_code)
         linear_weights = get_compressed_list(model)
     
     if device == "auto":

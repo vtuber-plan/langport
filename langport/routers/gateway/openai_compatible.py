@@ -1,13 +1,16 @@
 import asyncio
 
 import asyncio
+import base64
 import json
 
-from typing import Coroutine, Generator, Optional, Union, Dict, List, Any
+from typing import AsyncGenerator, Coroutine, Generator, Optional, Union, Dict, List, Any
 
 from fastapi.responses import StreamingResponse
 import httpx
 import shortuuid
+
+import numpy as np
 
 from langport.constants import WORKER_API_TIMEOUT, ErrorCode
 from langport.model.model_adapter import get_conversation_template
@@ -39,21 +42,27 @@ from langport.protocol.worker_protocol import (
     GenerationWorkerResult,
 )
 from langport.core.dispatch import DispatchMethod
-from langport.routers.gateway.common import LANGPORT_HEADER, AppSettings, _get_worker_address, _list_models, check_model, check_requests, create_error_response
+from langport.routers.gateway.common import (
+    LANGPORT_HEADER,
+    AppSettings,
+    _get_worker_address,
+    _list_models,
+    check_model,
+    check_requests,
+    create_bad_request_response
+)
 
 def clean_system_prompts(messages: List[Dict[str, str]]):
     system_prompt = ""
     result = []
     for i, message in enumerate(messages):
-        if i != 0 and message["role"] == "system":
-            system_prompt += message["content"] + "\n"
+        if len(system_prompt) == 0 and message["role"] == "system":
+            system_prompt = message["content"]
             continue
-        result.append(message)
-    system_prompt = system_prompt.rstrip("\n")
-    if len(messages) > 0 and messages[0]["role"] == "system":
-        messages[0]["content"] += "\n" + system_prompt
-    else:
-        messages.insert(0, {"role": "system", "content": system_prompt})
+        if message["role"] in ["user", "assistant"]:
+            result.append(message)
+    # system_prompt = system_prompt.rstrip("\n")
+    result.insert(0, {"role": "system", "content": system_prompt})
     return result
 
 def get_gen_params(
@@ -72,12 +81,11 @@ def get_gen_params(
 ) -> Dict[str, Any]:
     # is_chatglm = "chatglm" in model_name.lower()
     conv = get_conversation_template(model_name)
-
     if isinstance(messages, str):
         prompt = messages
     else:
-        messages = clean_system_prompts(messages)
-        for message in messages:
+        clean_messages = clean_system_prompts(messages)
+        for message in clean_messages:
             msg_role = message["role"]
             if msg_role == "system":
                 conv.system = message["content"]
@@ -107,14 +115,27 @@ def get_gen_params(
         "stop_token_ids": conv.settings.stop_token_ids,
     }
 
+    stop_str = []
+    conv_stop_str = conv.settings.stop_str
+    if isinstance(conv_stop_str, str):
+        stop_str.append(conv_stop_str)
+    elif isinstance(conv_stop_str, list) or isinstance(conv_stop_str, tuple):
+        if len(conv_stop_str) > 0 and not isinstance(conv_stop_str[0], str):
+            raise Exception("The type of stop_str shall be str or list of str")
+        stop_str = conv_stop_str
+    else:
+        raise Exception("The type of stop_str shall be str or list of str")
+    print(stop_str)
     if stop is None:
         gen_params.update(
-            {"stop": conv.settings.stop_str}
+            {"stop": stop_str}
         )
     elif isinstance(stop, str):
-        gen_params.update({"stop": [stop, conv.settings.stop_str]})
+        gen_params.update({"stop": [stop,] + stop_str})
+    elif isinstance(stop, list) or isinstance(stop, tuple):
+        gen_params.update({"stop": stop + stop_str})
     else:
-        gen_params.update({"stop": stop + [conv.settings.stop_str]})
+        raise Exception(f"The type of stop shall be str or list of str, the type of stop is {type(stop)}")
     
     if presence_penalty is not None:
         gen_params["presence_penalty"] = presence_penalty
@@ -177,7 +198,7 @@ async def generate_completion_stream_generator(app_settings: AppSettings, payloa
     yield "data: [DONE]\n\n"
 
 
-async def generate_completion_stream(app_settings: AppSettings, url: str, payload: Dict[str, Any]) -> Generator[GenerationWorkerResult, Any, None]:
+async def generate_completion_stream(app_settings: AppSettings, url: str, payload: Dict[str, Any]) -> AsyncGenerator[GenerationWorkerResult, None]:
     async with httpx.AsyncClient() as client:
         try:
             worker_addr = await _get_worker_address(app_settings, payload["model"], "generation", client, DispatchMethod.LOTTERY)
@@ -231,7 +252,7 @@ async def single_completions_non_stream(app_settings: AppSettings, payload: Dict
 
 async def chat_completion_stream_generator(
     app_settings: AppSettings, payload: Dict[str, Any], n: int
-) -> Generator[str, Any, None]:
+) -> AsyncGenerator[str, None]:
     """
     Event stream format:
     https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#event_stream_format
@@ -322,7 +343,7 @@ async def completions_non_stream(app_settings: AppSettings, payload: Dict[str, A
     for i, content_task in enumerate(completions):
         content = await content_task
         if content.error_code != ErrorCode.OK:
-            return create_error_response(content.error_code, content.message)
+            return create_bad_request_response(content.error_code, content.message)
         if content.logprobs is None:
             logprobs = None
         else:
@@ -361,9 +382,9 @@ async def chat_completions_non_stream(app_settings: AppSettings, payload: Dict[s
     for i, content_task in enumerate(chat_completions):
         content = await content_task
         if content is None:
-            return create_error_response(ErrorCode.INTERNAL_ERROR, "Server internal error")
+            return create_bad_request_response(ErrorCode.INTERNAL_ERROR, "Server internal error")
         if content.error_code != ErrorCode.OK:
-            return create_error_response(content.error_code, content.message)
+            return create_bad_request_response(content.error_code, content.message)
         choices.append(
             ChatCompletionResponseChoice(
                 index=i,
@@ -442,17 +463,36 @@ async def api_embeddings(app_settings: AppSettings, request: EmbeddingsRequest):
     payload = {
         "model": request.model,
         "input": request.input,
+        "dimensions": request.dimensions,
     }
 
     response = await get_embedding(app_settings, payload)
     if response.type == "error":
-        return create_error_response(ErrorCode.INTERNAL_ERROR, response.message)
-    return EmbeddingsResponse(
-        data=[EmbeddingsData(embedding=response.embedding, index=0)],
-        model=request.model,
-        usage=UsageInfo(
-            prompt_tokens=response.usage.prompt_tokens,
-            total_tokens=response.usage.total_tokens,
-            completion_tokens=None,
-        ),
-    ).dict(exclude_none=True)
+        return create_bad_request_response(ErrorCode.INTERNAL_ERROR, response.message)
+    
+    if request.encoding_format is None or request.encoding_format == "float":
+        return EmbeddingsResponse(
+            data=[EmbeddingsData(embedding=each.embedding, index=each.index) for each in response.embeddings],
+            model=request.model,
+            usage=UsageInfo(
+                prompt_tokens=response.usage.prompt_tokens,
+                total_tokens=response.usage.total_tokens,
+                completion_tokens=None,
+            ),
+        ).dict(exclude_none=True)
+    elif request.encoding_format == "base64":
+        return EmbeddingsResponse(
+            data=[EmbeddingsData(
+                embedding=base64.b64encode(np.array(each.embedding, dtype="float32").tobytes()).decode("utf-8"),
+                index=each.index
+                ) for each in response.embeddings
+            ],
+            model=request.model,
+            usage=UsageInfo(
+                prompt_tokens=response.usage.prompt_tokens,
+                total_tokens=response.usage.total_tokens,
+                completion_tokens=None,
+            ),
+        ).dict(exclude_none=True)
+    else:
+        raise Exception("Invalid encoding_format param.")

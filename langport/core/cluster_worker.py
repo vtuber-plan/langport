@@ -104,8 +104,8 @@ class ClusterWorker(ClusterNode):
                 await asyncio.sleep(0.01)
                 retry_counter += 1
                 # If client disconnected, stop to wait queue.
-                if retry_counter > 2000:
-                    break
+                if retry_counter > 60 * 100:
+                    raise ValueError("Worker task execution timeout")
                 else:
                     continue
             retry_counter = 0

@@ -115,15 +115,17 @@ class ChatCompletionStreamResponse(BaseModel):
     model: str
     choices: List[ChatCompletionResponseStreamChoice]
 
-
+# TODO: Support List[int] and List[List[int]]
 class EmbeddingsRequest(BaseModel):
     model: str
-    input: str
+    input: Union[str, List[str]]
     user: Optional[str] = None
+    encoding_format: Optional[Literal["float", "base64"]] = None
+    dimensions: Optional[int] = None
 
 class EmbeddingsData(BaseModel):
     object: str = "embedding"
-    embedding: List[float]
+    embedding: Union[List[float], str]
     index: int
 
 class EmbeddingsResponse(BaseModel):

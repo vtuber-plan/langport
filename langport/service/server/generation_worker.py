@@ -23,6 +23,7 @@ if __name__ == "__main__":
     parser.add_argument("--limit-model-concurrency", type=int, default=4)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--stream-interval", type=int, default=2)
+    parser.add_argument("--sleep-time", type=int, default=-1, help="Offload model after n seconds")
     args = parser.parse_args()
 
     node_id = str(uuid.uuid4())
@@ -66,6 +67,7 @@ if __name__ == "__main__":
         group_size=args.group_size,
         trust_remote_code=args.trust_remote_code,
         offload_folder=args.offload_folder,
+        sleep_time=args.sleep_time
     )
     
     app.node = GenerationModelWorker(
