@@ -6,7 +6,7 @@ pydantic==2.7.4
 pydantic-settings==2.3.4
 requests==2.30.0
 shortuuid==1.0.13
-tenacity==8.2.2
+tenacity==8.5.0
 transformers==4.34.0
 uvicorn==0.22.0
 torch==2.1.2
