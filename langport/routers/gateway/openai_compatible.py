@@ -160,7 +160,7 @@ async def api_models(app_settings: AppSettings):
 async def generate_completion_stream_generator(app_settings: AppSettings, payload: Dict[str, Any], n: int):
     model_name = payload["model"]
     id = f"cmpl-{shortuuid.random()}"
-    finish_stream_events = []
+    finish_stream_events: List[CompletionStreamResponse] = []
 
     for i in range(n):
         previous_text = ""
@@ -176,7 +176,7 @@ async def generate_completion_stream_generator(app_settings: AppSettings, payloa
             if content.logprobs is None:
                 logprobs = None
             else:
-                logprobs = CompletionLogprobs.parse_obj(content.logprobs.dict())
+                logprobs = CompletionLogprobs.model_validate(content.logprobs.model_dump())
             choice_data = CompletionResponseStreamChoice(
                 index=i,
                 text=delta_text,
@@ -190,11 +190,11 @@ async def generate_completion_stream_generator(app_settings: AppSettings, payloa
                 if content.finish_reason is not None:
                     finish_stream_events.append(chunk)
                 continue
-            yield f"data: {chunk.json(exclude_unset=True, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps(chunk.model_dump(exclude_unset=True), ensure_ascii=False)}\n\n"
 
     # There is not "content" field in the last delta message, so exclude_none to exclude field "content".
     for finish_chunk in finish_stream_events:
-        yield f"data: {finish_chunk.json(exclude_unset=True, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps(finish_chunk.model_dump(exclude_unset=True), ensure_ascii=False)}\n\n"
     yield "data: [DONE]\n\n"
 
 
@@ -233,9 +233,9 @@ async def generate_completion_stream(app_settings: AppSettings, url: str, payloa
                             )
                             break
                         if data["type"] == "error":
-                            yield BaseWorkerResult.parse_obj(data)
+                            yield BaseWorkerResult.model_validate(data)
                             break
-                        yield GenerationWorkerResult.parse_obj(data)
+                        yield GenerationWorkerResult.model_validate(data)
         except httpx.ReadTimeout:
             yield BaseWorkerResult(
                 type="error",
@@ -323,9 +323,9 @@ async def get_embedding(app_settings: AppSettings, payload: Dict[str, Any]) -> E
             timeout=WORKER_API_TIMEOUT,
         )
         if response.json()["type"] == "error":
-            error_message = BaseWorkerResult.parse_obj(response.json())
+            error_message = BaseWorkerResult.model_validate(response.json())
             return error_message
-        return EmbeddingWorkerResult.parse_obj(response.json())
+        return EmbeddingWorkerResult.model_validate(response.json())
 
 
 async def completions_stream(app_settings: AppSettings, payload: Dict[str, Any], request: CompletionRequest):
@@ -333,7 +333,7 @@ async def completions_stream(app_settings: AppSettings, payload: Dict[str, Any],
     return StreamingResponse(generator, media_type="text/event-stream")
 
 async def completions_non_stream(app_settings: AppSettings, payload: Dict[str, Any], request: CompletionRequest):
-    completions = []
+    completions: List[Optional[asyncio.Task[GenerationWorkerResult]]]  = []
     for i in range(request.n):
         content = asyncio.create_task(single_completions_non_stream(app_settings, payload))
         completions.append(content)
@@ -347,7 +347,7 @@ async def completions_non_stream(app_settings: AppSettings, payload: Dict[str, A
         if content.logprobs is None:
             logprobs = None
         else:
-            logprobs = CompletionLogprobs.parse_obj(content.logprobs.dict())
+            logprobs = CompletionLogprobs.model_validate(content.logprobs.model_dump())
         choices.append(
             CompletionResponseChoice(
                 index=i,
@@ -356,12 +356,12 @@ async def completions_non_stream(app_settings: AppSettings, payload: Dict[str, A
                 finish_reason=content.finish_reason,
             )
         )
-        task_usage = UsageInfo.parse_obj(content.usage)
-        for usage_key, usage_value in task_usage.dict().items():
+        task_usage = UsageInfo.model_validate(content.usage.model_dump())
+        for usage_key, usage_value in task_usage.model_dump().items():
             setattr(usage, usage_key, getattr(usage, usage_key) + usage_value)
 
     return CompletionResponse(
-        model=request.model, choices=choices, usage=UsageInfo.parse_obj(usage)
+        model=request.model, choices=choices, usage=UsageInfo.model_validate(usage)
     )
 
 async def chat_completions_stream(app_settings: AppSettings, payload: Dict[str, Any], request: ChatCompletionRequest):
@@ -373,7 +373,7 @@ async def chat_completions_stream(app_settings: AppSettings, payload: Dict[str, 
 
 async def chat_completions_non_stream(app_settings: AppSettings, payload: Dict[str, Any], request: ChatCompletionRequest):
     choices = []
-    chat_completions = []
+    chat_completions: List[Optional[asyncio.Task[GenerationWorkerResult]]] = []
     for i in range(request.n):
         content = asyncio.create_task(single_chat_completions_non_stream(app_settings, payload))
         chat_completions.append(content)
@@ -394,8 +394,8 @@ async def chat_completions_non_stream(app_settings: AppSettings, payload: Dict[s
         )
         if content.usage is None:
             continue
-        task_usage = UsageInfo.parse_obj(content.usage)
-        for usage_key, usage_value in task_usage.dict().items():
+        task_usage = UsageInfo.model_validate(content.usage.model_dump())
+        for usage_key, usage_value in task_usage.model_dump().items():
             setattr(usage, usage_key, getattr(usage, usage_key) + usage_value)
 
     return ChatCompletionResponse(model=request.model, choices=choices, usage=usage)
