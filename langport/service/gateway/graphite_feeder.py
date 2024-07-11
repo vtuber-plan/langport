@@ -26,11 +26,11 @@ async def list_workers(app_settings: AppSettings):
         )
         ret = await client.post(
             app_settings.controller_address + "/get_worker_address",
-            json=payload.dict(),
+            json=payload.model_dump(),
         )
         if ret.status_code != 200:
             return []
-        response = WorkerAddressResponse.parse_obj(ret.json())
+        response = WorkerAddressResponse.model_validate(ret.json())
         address_list = response.address_list
         data = [json.loads(obj) for obj in response.values]
 

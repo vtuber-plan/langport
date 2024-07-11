@@ -93,4 +93,4 @@ class GenerationModelWorker(ClusterWorker):
 
     async def generation_bytes_stream(self, task: GenerationTask):
         async for chunk in self.generation_stream(task):
-            yield json.dumps(chunk.dict()).encode() + b"\0"
+            yield json.dumps(chunk.model_dump()).encode() + b"\0"

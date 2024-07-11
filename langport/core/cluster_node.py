@@ -116,10 +116,10 @@ class ClusterNode(BaseNode):
         response = await self.client.post(
             node_addr + "/node_info",
             headers=self.headers,
-            json=NodeInfoRequest(node_id=self.node_id).dict(),
+            json=NodeInfoRequest(node_id=self.node_id).model_dump(),
             timeout=WORKER_API_TIMEOUT,
         )
-        remote_node_info = NodeInfoResponse.parse_obj(response.json())
+        remote_node_info = NodeInfoResponse.model_validate(response.json())
         return remote_node_info.node_info
 
     async def register_node(self, target_node_addr: str, register_node_id: str, register_node_addr: str) -> bool:
@@ -138,10 +138,10 @@ class ClusterNode(BaseNode):
             response = await self.client.post(
                 target_node_addr + "/register_node",
                 headers=self.headers,
-                json=data.dict(),
+                json=data.model_dump(),
                 timeout=WORKER_API_TIMEOUT,
             )
-            remote = RegisterNodeResponse.parse_obj(response.json())
+            remote = RegisterNodeResponse.model_validate(response.json())
             self._add_node(remote.node_id, remote.node_addr)
             
             # fetch remote node info
@@ -175,10 +175,10 @@ class ClusterNode(BaseNode):
         response = await self.client.post(
             target_node_addr + "/remove_node",
             headers=self.headers,
-            json=data.dict(),
+            json=data.model_dump(),
             timeout=WORKER_API_TIMEOUT,
         )
-        ret = RemoveNodeResponse.parse_obj(response.json())
+        ret = RemoveNodeResponse.model_validate(response.json())
 
         return True
 
@@ -200,10 +200,10 @@ class ClusterNode(BaseNode):
         response = await self.client.post(
             node_addr + "/heartbeat",
             headers=self.headers,
-            json=data.dict(),
+            json=data.model_dump(),
             timeout=WORKER_API_TIMEOUT,
         )
-        ret = HeartbeatPong.parse_obj(response.json())
+        ret = HeartbeatPong.model_validate(response.json())
   
         return ret
 
@@ -230,10 +230,10 @@ class ClusterNode(BaseNode):
         response = await self.client.post(
             node_addr + "/node_list",
             headers=self.headers,
-            json=data.dict(),
+            json=data.model_dump(),
             timeout=WORKER_API_TIMEOUT,
         )
-        ret = NodeListResponse.parse_obj(response.json())
+        ret = NodeListResponse.model_validate(response.json())
   
         return ret
 
@@ -255,10 +255,10 @@ class ClusterNode(BaseNode):
         response = await self.client.post(
             node_addr + "/get_node_state",
             headers=self.headers,
-            json=data.dict(),
+            json=data.model_dump(),
             timeout=WORKER_API_TIMEOUT,
         )
-        ret = GetNodeStateResponse.parse_obj(response.json())
+        ret = GetNodeStateResponse.model_validate(response.json())
 
         return ret
     

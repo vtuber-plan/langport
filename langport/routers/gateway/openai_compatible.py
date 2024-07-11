@@ -166,7 +166,7 @@ async def generate_completion_stream_generator(app_settings: AppSettings, payloa
         previous_text = ""
         async for content in generate_completion_stream(app_settings, "/completion_stream", payload):
             if content.error_code != ErrorCode.OK:
-                yield f"data: {json.dumps(content.dict(), ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps(content.model_dump(), ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
                 return
             decoded_unicode = content.text.replace("\ufffd", "")
@@ -269,12 +269,12 @@ async def chat_completion_stream_generator(
         chunk = ChatCompletionStreamResponse(
             id=id, choices=[choice_data], model=payload["model"]
         )
-        yield f"data: {chunk.json(exclude_unset=True, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps(chunk.model_dump(exclude_unset=True), ensure_ascii=False)}\n\n"
 
         previous_text = ""
         async for content in generate_completion_stream(app_settings, "/chat_stream", payload):
             if content.error_code != ErrorCode.OK:
-                yield f"data: {json.dumps(content.dict(), ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps(content.model_dump(), ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
                 return
             decoded_unicode = content.text.replace("\ufffd", "")
@@ -479,7 +479,7 @@ async def api_embeddings(app_settings: AppSettings, request: EmbeddingsRequest):
                 total_tokens=response.usage.total_tokens,
                 completion_tokens=None,
             ),
-        ).dict(exclude_none=True)
+        ).model_dump(exclude_none=True)
     elif request.encoding_format == "base64":
         return EmbeddingsResponse(
             data=[EmbeddingsData(
@@ -493,6 +493,6 @@ async def api_embeddings(app_settings: AppSettings, request: EmbeddingsRequest):
                 total_tokens=response.usage.total_tokens,
                 completion_tokens=None,
             ),
-        ).dict(exclude_none=True)
+        ).model_dump(exclude_none=True)
     else:
         raise Exception("Invalid encoding_format param.")

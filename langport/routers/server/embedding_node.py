@@ -10,4 +10,4 @@ async def api_embeddings(request: EmbeddingsTask):
     await app.node.acquire_model_semaphore()
     embedding = await app.node.get_embeddings(request)
     background_tasks = create_background_tasks(app.node)
-    return JSONResponse(content=embedding.dict(), background=background_tasks)
+    return JSONResponse(content=embedding.model_dump(), background=background_tasks)

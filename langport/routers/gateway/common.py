@@ -43,12 +43,12 @@ LANGPORT_HEADER = {"User-Agent": "Langport API Server"}
 
 def create_server_error_response(code: int, message: str) -> JSONResponse:
     return JSONResponse(
-        ErrorResponse(message=message, code=code).dict(), status_code=500
+        ErrorResponse(message=message, code=code).model_dump(), status_code=500
     )
 
 def create_bad_request_response(code: int, message: str) -> JSONResponse:
     return JSONResponse(
-        ErrorResponse(message=message, code=code).dict(), status_code=400
+        ErrorResponse(message=message, code=code).model_dump(), status_code=400
     )
 
 
@@ -79,9 +79,9 @@ async def _get_worker_address(
         raise Exception("Error dispatch method.")
     ret = await client.post(
         controller_address + "/get_worker_address",
-        json=payload.dict(),
+        json=payload.model_dump(),
     )
-    response = WorkerAddressResponse.parse_obj(ret.json())
+    response = WorkerAddressResponse.model_validate(ret.json())
     address_list = response.address_list
     values = [json.loads(obj) for obj in response.values]
 
@@ -122,14 +122,14 @@ async def _list_models(app_settings: AppSettings, feature: Optional[str], client
     try:
         ret = await client.post(
             controller_address + "/get_worker_address",
-            json=payload.dict(),
+            json=payload.model_dump(),
         )
         if ret.status_code != 200:
             return []
     except Exception as e:
         print("[Exception] list model: ", e)
         return []
-    response = WorkerAddressResponse.parse_obj(ret.json())
+    response = WorkerAddressResponse.model_validate(ret.json())
     
     address_list = response.address_list
     models = [json.loads(obj) for obj in response.values]

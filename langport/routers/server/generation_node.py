@@ -1,7 +1,8 @@
+from typing import Optional
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 
-from langport.protocol.worker_protocol import EmbeddingsTask, GenerationTask
+from langport.protocol.worker_protocol import BaseWorkerResult, EmbeddingsTask, GenerationTask
 from .core_node import app, create_background_tasks
 
 
@@ -38,13 +39,11 @@ async def api_chat(request: Request):
         echo=params.get("echo", False),
         stop_token_ids=params.get("stop_token_ids", None),
     ))
-    completion = None
+    completion: Optional[BaseWorkerResult] = None
     for chunk in generator:
         completion = chunk
     background_tasks = create_background_tasks(app.node)
-    return JSONResponse(content=completion.dict(), background=background_tasks)
-
-
+    return JSONResponse(content=completion.model_dump(), background=background_tasks)
 
 @app.post("/completion_stream")
 async def api_completion_stream(request: Request):
@@ -86,4 +85,4 @@ async def api_completion(request: Request):
     for chunk in generator:
         completion = chunk
     background_tasks = create_background_tasks(app.node)
-    return JSONResponse(content=completion.dict(), background=background_tasks)
+    return JSONResponse(content=completion.model_dump(), background=background_tasks)
