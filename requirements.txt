@@ -10,7 +10,7 @@ tenacity==8.2.2
 transformers==4.34.0
 uvicorn==0.22.0
 torch==2.1.2
-cachetools==5.3.0
+cachetools==5.4.0
 asyncache==0.3.1
 graphyte==1.7.1
 accelerate==0.22.0
