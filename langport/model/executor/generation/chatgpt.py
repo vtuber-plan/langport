@@ -53,8 +53,10 @@ class ChatGPTGenerationExecutor(RemoteModelExecutor):
             api_key=api_key,
         )
 
-        openai.api_base = api_url
-        openai.api_key = api_key
+        self.client = openai.OpenAI(
+            base_url = api_url,
+            api_key=api_key,
+        )
         
         self._context_len = 2048
 
@@ -92,7 +94,7 @@ class ChatGPTGenerationExecutor(RemoteModelExecutor):
                     "role": role,
                     "content": section
                 })
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 stream=True,

@@ -307,6 +307,11 @@ class GenerationModel:
                 if task.temperature < 1e-5 or task.top_p < 1e-8:  # greedy
                     token = int(torch.argmax(last_token_logits))
                 else:
+                    # 检测 nan 和 inf，并将它们替换为 0
+                    last_token_logits[torch.isnan(last_token_logits)] = 0
+                    last_token_logits[torch.isinf(last_token_logits)] = 0
+                    # 对 logits 进行处理，确保没有 inf、nan 或小于 0 的值
+                    last_token_logits = torch.clamp(last_token_logits, min=0)  # 将所有小于 0 的值设为 0
                     probs = torch.softmax(last_token_logits, dim=-1)
                     sampled_tensor = torch.multinomial(probs, num_samples=2, replacement=False)
                     token = int(sampled_tensor[0].item())
